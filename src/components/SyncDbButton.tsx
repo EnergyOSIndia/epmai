@@ -11,10 +11,10 @@ export function SyncDbButton({ onSync, className }: { onSync: () => Promise<bool
     setSyncing(true);
     try {
       const changed = await onSync();
-      if (changed) toast.success("Sync DB: new data found and saved");
-      else toast("Sync DB: already up to date");
+      if (changed) toast.success("Sync: new data found and saved");
+      else toast("Sync: already up to date");
     } catch (e) {
-      toast.error("Sync DB failed", { description: e instanceof Error ? e.message : String(e) });
+      toast.error("Sync failed", { description: e instanceof Error ? e.message : String(e) });
     } finally {
       setSyncing(false);
     }
@@ -29,7 +29,7 @@ export function SyncDbButton({ onSync, className }: { onSync: () => Promise<bool
       )}
     >
       <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-      {syncing ? "Syncing…" : "Sync DB"}
+      {syncing ? "Syncing…" : "Sync"}
     </button>
   );
 }

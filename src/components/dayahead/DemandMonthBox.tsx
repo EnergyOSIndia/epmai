@@ -9,7 +9,7 @@ const BOX_CHART_H = 95;
 /** Forecast energy for a day in MU: 96 × 15-min MW blocks → MWh (÷4) → MU (÷1000). */
 const muOf = (f: number[]) => f.reduce((a, b) => a + b, 0) / 4 / 1000;
 const actualsOf = (day: DayAheadData | null) =>
-  day?.forecast ? buildActuals(day.forecast, { actual: day.actual, mape: day.mape, roastering: day.roastering, udm: day.udm }) : null;
+  day?.forecast ? buildActuals(day.forecast, { actual: day.actual, mape: day.mape, roastering: day.roastering, udm: day.udm, manual: day.manual }) : null;
 
 /** One day of the Demand month calendar, in the Supply month box style: day number, peak forecast
  *  ("Pk") and forecast energy (MU) over a tiny Day-ahead forecast chart. Click opens it full size.
