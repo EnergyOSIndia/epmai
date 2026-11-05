@@ -3,9 +3,11 @@ import { Cloud, CloudSun, Moon, Sun } from "lucide-react";
 import { Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { NOW } from "@/data/engine";
 import { cityOf, todayIso, weatherSummary, type Weather, type WeatherDay, type WeatherHour } from "@/lib/dayahead";
+import { cv } from "@/components/chart/colors";
 import { InteractiveLegend, type LegendItem } from "./InteractiveLegend";
 
-const C = { temp: "#f97316", feels: "#eab308", hum: "#3b82f6", wind: "#8b5cf6", dew: "#14b8a6" };
+// Themed chart tokens (--ch-*) so the weather lines track the palette and light/dark mode.
+const C = { temp: cv("--demand"), feels: cv("--c-solar"), hum: cv("--c-isgs"), wind: cv("--c-ipp"), dew: cv("--c-hydro") };
 const ITEMS: LegendItem[] = [
   { key: "temp", label: "Temperature", color: C.temp },
   { key: "feels", label: "Temperature Feels Like", color: C.feels },
@@ -138,7 +140,7 @@ function WeatherBody({ day, date }: { day: WeatherDay; date: string }) {
             <YAxis yAxisId="l" domain={[0, lMax]} ticks={ticks(0, lMax, 10)} allowDataOverflow tickLine={false} axisLine={false} width={26} tick={{ fontSize: 10 }} />
             <YAxis yAxisId="r" orientation="right" domain={[hMin, hMax]} ticks={ticks(hMin, hMax, 12)} allowDataOverflow tickFormatter={(v) => v + "%"} tickLine={false} axisLine={false} width={34} tick={{ fontSize: 10 }} />
             {isToday && (
-              <ReferenceArea yAxisId="l" x1={weather[Math.min(23, NOW.getHours())].t} x2={weather[23].t} fill="#c4b5fd" fillOpacity={0.18} />
+              <ReferenceArea yAxisId="l" x1={weather[Math.min(23, NOW.getHours())].t} x2={weather[23].t} fill={cv("--c-ipp")} fillOpacity={0.18} />
             )}
             {!hidden.has("wind") && <Bar yAxisId="l" dataKey="wind" name="Wind" fill={C.wind} fillOpacity={0.85} radius={[6, 6, 6, 6]} maxBarSize={18} isAnimationActive={false} />}
             {!hidden.has("temp") && <Line yAxisId="l" dataKey="temp" name="Temperature" stroke={C.temp} strokeWidth={2} dot={false} isAnimationActive={false} />}

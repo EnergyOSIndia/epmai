@@ -1,11 +1,9 @@
-import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { CAD, NOW, isMod, modName, tfIdx, tfName } from "@/data/engine";
+import { CAD, isMod, modName, tfIdx, tfName } from "@/data/engine";
 import { G, statusText } from "@/data/model";
 import { SUBS, det } from "@/data/insights";
 import { Chart, Legend } from "@/components/chart/Chart";
-import { DemandForecastWeekNav, ForecastAccuracyDashboard, FreeDateNav, TomorrowLabel } from "@/components/ForecastAccuracyDashboard";
 import { DemandTuneupPanel } from "@/components/DemandTuneupPanel";
 import { BlockView, VizView } from "@/components/blocks";
 import { Kpis } from "@/components/Kpis";
@@ -16,6 +14,7 @@ import { usePanels } from "@/lib/panels";
 import { chartTitle } from "@/pages/AllModules/shared/ModuleSections";
 import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
 import { ReportLibrary } from "@/components/ReportLibrary";
+import { MODULE_PAGES } from "@/pages/AllModules";
 
 /** One grid cell (a single module at a single horizon) opened on its own page. The view — Overview
  *  (the blown-up chart) or one of the module's detail metrics — is picked from the header strip (?t). */
@@ -24,19 +23,25 @@ export function CellPage() {
   const { tf } = useModuleTf();
   const { tab } = useCellTab();
   const { openDrill } = usePanels();
-  const [fcDate, setFcDate] = useState(() => new Date(NOW));
   if (!isMod(moduleId)) return <NotFoundPage />;
   const mod = moduleId, g = G(mod, tf), s = g.sum, ti = tfIdx(tf);
   const subs = SUBS[mod];
   const activeSub = subs.find((S) => S.id === tab);
- 
+
   const isDashboard = mod === "demand" && activeSub?.id === "acc";
-  
+
   const isTuneupPanel = mod === "demand" && activeSub?.id === "tuneup";
+
+  // Demand's "Demand Forecast" (acc) cell view is the same full dashboard as the Planning
+  // horizon for this horizon — rendered bare (no PageHead/Section/footer), exactly like /horizon.
+  if (isDashboard) {
+    const Page = MODULE_PAGES[mod].horizons[tf].Plan;
+    return <Page />;
+  }
 
   return (
     <>
-      {!(isDashboard || isTuneupPanel) && (
+      {!isTuneupPanel && (
         <PageHead
           crumb={<><Link to="/" search={keepH} className="hover:text-foreground hover:underline">Command centre</Link> / Cell</>}
           title={<>{modName(mod, tf)} <span className="font-normal text-muted-foreground">· {tfName(tf)}</span></>}
@@ -49,25 +54,16 @@ export function CellPage() {
         </PageHead>
       )}
 
-      <div className={(isDashboard || isTuneupPanel) ? "" : "mt-6"}>
+      <div className={isTuneupPanel ? "" : "mt-6"}>
         {activeSub ? (
           /* one of the module's detail metrics */
           (() => {
             if (isTuneupPanel) {
-              
-              const tuneupNav = tf === "da" ? <TomorrowLabel /> : tf === "id" ? undefined : <FreeDateNav />;
+              // The tuneup panel carries its own date control (bounded by the API's date range),
+              // so no dummy header nav here.
               return (
-                <Section title={activeSub.n} desc={activeSub.d} action={tuneupNav}>
+                <Section title={activeSub.n} desc={activeSub.d}>
                   <DemandTuneupPanel tf={tf} />
-                </Section>
-              );
-            }
-            if (isDashboard) {
-             
-              const forecastNav = tf === "da" ? <DemandForecastWeekNav date={fcDate} onChange={setFcDate} /> : tf === "id" ? undefined : <FreeDateNav />;
-              return (
-                <Section title={activeSub.n} desc={activeSub.d} action={forecastNav}>
-                  <ForecastAccuracyDashboard tf={tf} date={tf === "da" ? fcDate : undefined} />
                 </Section>
               );
             }

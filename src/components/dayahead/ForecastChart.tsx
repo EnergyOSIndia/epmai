@@ -4,9 +4,20 @@ import { Menu } from "lucide-react";
 import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { istNow } from "@/data/engine";
 import { BLOCKS, blockTime, todayIso, type Actuals } from "@/lib/dayahead";
+import { cv } from "@/components/chart/colors";
 import { InteractiveLegend, type LegendItem } from "./InteractiveLegend";
 
-const C = { actual: "#e11d48", forecast: "#2563eb", roast: "#f472b6", mape: "#34d399", manual: "#7c3aed", manualMape: "#a78bfa", udm: "#eab308" };
+// Series colours come from the themed chart tokens (--ch-*) so the chart follows the palette and
+// light/dark mode like the rest of the app. cv("--neg") → var(--ch-neg), etc.
+const C = {
+  actual: cv("--neg"),        // red
+  forecast: cv("--c-isgs"),   // blue
+  roast: cv("--c-store"),     // pink
+  mape: cv("--pos"),          // green
+  manual: cv("--c-ipp"),      // purple
+  manualMape: cv("--c-hydro"),// cyan
+  udm: cv("--c-solar"),       // gold
+};
 
 type Row = {
   b: number; t: string; forecast: number; actual?: number; roast?: [number, number]; roastV?: number;
@@ -212,7 +223,7 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
             {/* current block (today only): a plain bar over that block's own 15-min slot (x1 = x2 fills
                 its whole band, e.g. 12:15–12:30), moving with the clock */}
             {isToday && (
-              <ReferenceArea yAxisId="mw" x1={blockTime(liveB)} x2={blockTime(liveB)} fill="#14b8a6" fillOpacity={0.18} ifOverflow="visible" />
+              <ReferenceArea yAxisId="mw" x1={blockTime(liveB)} x2={blockTime(liveB)} fill={cv("--accent")} fillOpacity={0.18} ifOverflow="visible" />
             )}
             {on("roast") && <Area yAxisId="mw" dataKey="roastSolid" stroke={C.roast} strokeWidth={1} fill={C.roast} fillOpacity={0.3} isAnimationActive={false} activeDot={false} />}
             {on("roast") && isToday && <Area yAxisId="mw" dataKey="roastDot" stroke={C.roast} strokeWidth={1} strokeDasharray="2 3" fill={C.roast} fillOpacity={0.12} isAnimationActive={false} activeDot={false} />}

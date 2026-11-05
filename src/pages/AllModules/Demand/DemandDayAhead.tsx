@@ -15,6 +15,7 @@ import { ForecastDateControl } from "@/components/dayahead/ForecastDateControl";
 import { KpiCard } from "@/components/dayahead/KpiCard";
 import { PeriodBreakdown } from "@/components/dayahead/PeriodBreakdown";
 import { WeatherCard } from "@/components/dayahead/WeatherCard";
+import { cv } from "@/components/chart/colors";
 
 const n2 = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const card = "min-h-0 rounded-xl border bg-card p-3";
@@ -62,11 +63,11 @@ function ForecastTab({ date, setDate, maxDate, location, setLocation }: {
   return (
     <>
       <div className="grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
-        <KpiCard title="Total energy" strip="#3b82f6" value={n2(k.total) + " MWh"} caption="96 blocks summed" />
-        <KpiCard title="Peak demand" strip="#ef4444" value={n2(k.peak) + " MW"} caption={`Block ${k.peakB + 1} • ${blockTime(k.peakB)}`} />
-        <KpiCard title="Min demand" strip="#f97316" value={k.min.toFixed(2) + " MW"} caption="Lowest 15-min block" />
-        <KpiCard title="Average demand" strip="#8b5cf6" value={k.avg.toFixed(2) + " MW"} caption="Mean 15-min block" />
-        <KpiCard title="Temp range" strip="#3b82f6" value={wxDay ? `${Math.min(...wxDay.temps).toFixed(1)}°—${Math.max(...wxDay.temps).toFixed(1)}°C` : null} caption="weather forecast" />
+        <KpiCard title="Total energy" strip={cv("--c-isgs")} value={n2(k.total) + " MWh"} caption="96 blocks summed" />
+        <KpiCard title="Peak demand" strip={cv("--neg")} value={n2(k.peak) + " MW"} caption={`Block ${k.peakB + 1} • ${blockTime(k.peakB)}`} />
+        <KpiCard title="Min demand" strip={cv("--demand")} value={k.min.toFixed(2) + " MW"} caption="Lowest 15-min block" />
+        <KpiCard title="Average demand" strip={cv("--c-ipp")} value={k.avg.toFixed(2) + " MW"} caption="Mean 15-min block" />
+        <KpiCard title="Temp range" strip={cv("--c-hydro")} value={wxDay ? `${Math.min(...wxDay.temps).toFixed(1)}°—${Math.max(...wxDay.temps).toFixed(1)}°C` : null} caption="weather forecast" />
         {dateCtl}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-12">
