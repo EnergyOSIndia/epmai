@@ -6,6 +6,8 @@ export interface DemandApiRow {
     ts_date: string;
     location_id: number;
     created_at: string;
+    /** Day MAPE (Manual rows of demand-forcast). */
+    day_mape?: number | null;
     [key: `block_${number}`]: number;
 }
 
@@ -125,6 +127,10 @@ export interface DayAheadData {
     /** System Forecast error bands (share of blocks per MAPE range), as the API computes them. */
     errorRanges: { range: string; blocks: number; percent: number }[] | null;
     dayMape: number | null;
+    /** Manual forecast blocks from tuneup (null if no Manual row exists). */
+    manual: number[] | null;
+    /** Manual day MAPE from demand_forecast.day_mape (null if no Manual row). */
+    manualDayMape: number | null;
 }
 
 export interface DemandState {

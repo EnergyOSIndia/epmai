@@ -46,8 +46,8 @@ export function DemandDayAhead() {
 function ForecastTab({ date, setDate, maxDate, location, setLocation }: {
   date: string; setDate: (d: string) => void; maxDate: string; location: string; setLocation: (l: string) => void;
 }) {
-  const { forecast, actual, mape, roastering, udm, errorRanges, loading, error } = useDayForecast(date);
-  const actuals = useMemo(() => (forecast ? buildActuals(forecast, { actual, mape, roastering, udm }) : null), [forecast, actual, mape, roastering, udm]);
+  const { forecast, actual, mape, roastering, udm, manual, errorRanges, loading, error } = useDayForecast(date);
+  const actuals = useMemo(() => (forecast ? buildActuals(forecast, { actual, mape, roastering, udm, manual }) : null), [forecast, actual, mape, roastering, udm, manual]);
   const weather = useWeather(date);
   const wxDay = weather.days[location];
   const k = useMemo(() => (forecast ? kpisOf(forecast) : null), [forecast]);

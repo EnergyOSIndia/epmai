@@ -135,6 +135,7 @@ export const fetchWeekDemandForecast = createAsyncThunk<
 
 // 3. Day-ahead Thunk (data_id=102110, from_date = to_date): System Forecast for one date, plus —
 // for today or earlier — Actual, Roastering, MAPE and UDM per block and the error bands.
+// Also fetches the Manual forecast (if any) from the tuneup API.
 export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string }>(
     "demand/fetchDayAhead",
     async ({ date }) => {
@@ -153,12 +154,42 @@ export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string }>(
         if (res.status === 404) return emptyDay(date);
         if (!res.ok) throw new Error(`Failed to fetch day-ahead forecast: ${res.statusText}`);
         const json: DayAheadApiResponse = await res.json();
-        return dayFromApi(json.days?.find((d) => d.date === date) ?? json.days?.[0], date);
+        const day = dayFromApi(json.days?.find((d) => d.date === date) ?? json.days?.[0], date);
+
+        // Fetch Manual forecast from demand-forcast API (same table, forecasted_by=Manual)
+        try {
+            const manualQuery = new URLSearchParams({
+                data_id: "102110",
+                from_date: date,
+                to_date: date,
+                location_id: "10030",
+                forcasted_by: "Manual",
+            });
+            const manualRes = await fetch(`${BASE_URL}demand-forcast/?${manualQuery.toString()}`, {
+                headers: { accept: "*/*" },
+            });
+            if (manualRes.ok) {
+                const manualJson: DemandApiResponse = await manualRes.json();
+                if (manualJson.rows?.length) {
+                    const row = manualJson.rows[0];
+                    const manualBlocks: number[] = [];
+                    for (let b = 1; b <= 96; b++) {
+                        manualBlocks.push(Number(row[`block_${b}`]) || 0);
+                    }
+                    day.manual = manualBlocks;
+                    day.manualDayMape = Number(row.day_mape) || null;
+                }
+            }
+        } catch {
+            // Manual forecast not available — not an error
+        }
+
+        return day;
     },
 );
 
 const emptyDay = (date: string): DayAheadData =>
-    ({ date, forecast: null, actual: null, mape: null, roastering: null, udm: null, errorRanges: null, dayMape: null });
+    ({ date, forecast: null, actual: null, mape: null, roastering: null, udm: null, errorRanges: null, dayMape: null, manual: null, manualDayMape: null });
 
 /** One API day → 96-block arrays. Actual / Roastering / MAPE / UDM and the error bands only when
  *  the API has actuals for it (today or earlier). */
@@ -182,6 +213,8 @@ function dayFromApi(day: DayAheadApiResponse["days"][number] | undefined, date: 
             ? day.mape_error_ranges.map((r) => ({ range: r.error_range, blocks: r.blocks, percent: r.percent }))
             : null,
         dayMape: day.day_mape ?? null,
+        manual: null,
+        manualDayMape: null,
     };
 }
 

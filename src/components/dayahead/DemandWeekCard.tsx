@@ -22,6 +22,7 @@ export function averageDayAhead(days: DayAheadData[], key: string): DayAheadData
     actual: avg((d) => d.actual), mape: avg((d) => d.mape), roastering: avg((d) => d.roastering), udm: avg((d) => d.udm),
     errorRanges: null,
     dayMape: mapes.length ? +(mapes.reduce((a, b) => a + b, 0) / mapes.length).toFixed(4) : null,
+    manual: null, manualDayMape: null,
   };
 }
 
@@ -39,7 +40,7 @@ export function DemandWeekCard({ title, iso, isToday, day, isLoading, height, fo
   footer?: string;
 }) {
   const actuals = useMemo(
-    () => (day?.forecast ? buildActuals(day.forecast, { actual: day.actual, mape: day.mape, roastering: day.roastering, udm: day.udm }) : null),
+    () => (day?.forecast ? buildActuals(day.forecast, { actual: day.actual, mape: day.mape, roastering: day.roastering, udm: day.udm, manual: day.manual }) : null),
     [day],
   );
   const peak = day?.forecast ? Math.round(Math.max(...day.forecast)) : null;

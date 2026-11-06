@@ -27,13 +27,15 @@ export type DayForecast = {
   roastering: number[] | null;
   /** UDM per block — also only for today or earlier. */
   udm: number[] | null;
+  /** Manual forecast from demand_forecast (forecasted_by=Manual), null when no Manual row exists. */
+  manual: number[] | null;
   /** System Forecast error bands from the API, null when there are no actuals yet. */
   errorRanges: { range: string; blocks: number; percent: number }[] | null;
   loading: boolean;
   error: string | null;
 };
 
-/** System Forecast and Actual for one date, from the day-ahead API via Redux. */
+/** System Forecast, Actual and Manual for one date, from the day-ahead API via Redux. */
 export function useDayForecast(date: string): DayForecast {
   const dispatch = useAppDispatch();
   const { dayData, dayLoading, dayError } = useAppSelector((s) => s.demand);
@@ -43,6 +45,7 @@ export function useDayForecast(date: string): DayForecast {
   const day = dayData?.date === date ? dayData : null;
   return {
     forecast: day?.forecast ?? null, actual: day?.actual ?? null, mape: day?.mape ?? null, roastering: day?.roastering ?? null, udm: day?.udm ?? null,
+    manual: day?.manual ?? null,
     errorRanges: day?.errorRanges ?? null,
     loading: dayLoading, error: dayError,
   };
@@ -63,13 +66,24 @@ export type Actuals = {
 /** Actual, MAPE and Roastering all come from the API, only for today or earlier — null
  *  otherwise, which hides those series. If the API leaves out MAPE it's worked out as
  *  |actual − forecast| / actual, and a missing Roastering draws as zero. Manual Forecast
- *  isn't available yet, so it stays null and its series are hidden. */
-export function buildActuals(forecast: number[], d: Pick<DayForecast, "actual" | "mape" | "roastering" | "udm">): Actuals | null {
+ *  comes from demand_forecast (forecasted_by=Manual) — null when no Manual row exists. */
+export function buildActuals(forecast: number[], d: Pick<DayForecast, "actual" | "mape" | "roastering" | "udm" | "manual">): Actuals | null {
   if (!d.actual) return null;
-  // TODO: connect API — manual forecast (and its MAPE)
   const actual = d.actual;
   const mape = d.mape ?? actual.map((a, b) => +(Math.abs(a - forecast[b]) / (a || 1) * 100).toFixed(2));
-  return { actual, roastering: d.roastering ?? actual.map(() => 0), mape, udm: d.udm ?? null, manual: null, manualMape: null };
+  const roastering = d.roastering ?? actual.map(() => 0);
+
+  // Manual MAPE: |(actual + roastering) - manual| / max(|actual + roastering|, 1) * 100
+  let manualMape: number[] | null = null;
+  if (d.manual) {
+    manualMape = actual.map((a, b) => {
+      const base = a + (roastering[b] ?? 0);
+      const denom = Math.max(Math.abs(base), 1);
+      return +((Math.abs(base - (d.manual![b] ?? 0)) / denom) * 100).toFixed(2);
+    });
+  }
+
+  return { actual, roastering, mape, udm: d.udm ?? null, manual: d.manual ?? null, manualMape };
 }
 
 /* ---------- weather (API: weather/multi) ---------- */

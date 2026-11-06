@@ -39,6 +39,9 @@ export function CellPage() {
     return <Page />;
   }
 
+  // Demand Tune up fills the page on its own (no section header or footer links).
+  if (isTuneupPanel) return <DemandTuneupPanel tf={tf} />;
+
   return (
     <>
       {!isTuneupPanel && (
