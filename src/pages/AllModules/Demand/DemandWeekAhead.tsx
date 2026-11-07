@@ -7,13 +7,14 @@ import { WeekNavigator } from "@/components/weeksupply/WeekNavigator";
 import { dayTitle, getWeekRange, isIsoDate, isoOf, parseIso, todayIso } from "@/components/weeksupply/weekSupplyData";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchWeekDayAhead } from "@/store/slice/demandApiSlice";
+import { DemandPeriodForecast } from "@/components/dayahead/DemandPeriodForecast";
 
 /** Demand · Week ahead — Planning-horizon view. Same grid as Supply's week ahead: Mon Tue Wed /
  *  Thu Fri Remarks (Mon–Fri average) / Sat Sun Remarks (Sat–Sun average), each card the Day-ahead
  *  forecast chart (Actual, UDM, System Forecast, Roastering, MAPE) from the day_ahead API with
  *  data_id 102120, cached in IndexedDB (Sync DB re-checks the API). Weeks run back freely and forward up to next week; the week lives in the URL
  *  (?week=2026-10-26). */
-export function DemandWeekAhead() {
+function DemandWeekAheadGrid() {
   const dispatch = useAppDispatch();
   const { weekAhead, weekAheadLoading, weekAheadError } = useAppSelector((state) => state.demand);
   const search = useSearch({ strict: false }) as { week?: string };
@@ -81,9 +82,10 @@ export function DemandWeekAhead() {
   return (
     <div
       ref={rootRef}
-      className="flex flex-col rounded-[10px] border bg-card p-3 xl:min-h-[640px]"
-      // Negative bottom margin cancels the page's bottom padding so nothing scrolls.
-      style={{ height: `calc(100vh - ${top}px - 16px)`, marginBottom: -64 }}
+      // Negative margins take back most of the page padding so the grid uses the whole window;
+      // the bottom one cancels the page's bottom padding so nothing scrolls.
+      className="-mx-2 -mt-4 flex flex-col rounded-[10px] border bg-card p-2 lg:-mx-6 xl:min-h-[640px]"
+      style={{ height: `calc(100vh - ${top}px - 8px)`, marginBottom: -72 }}
     >
       <div className="mb-2 flex shrink-0 items-center justify-end gap-2">
         <WeekNavigator
@@ -112,5 +114,12 @@ export function DemandWeekAhead() {
   );
 }
 
-/** All modules → Demand shows the same view as the Planning horizon. */
-export const DemandWeekAheadModule = DemandWeekAhead;
+/** Demand · Week ahead — Planning horizon: the Forecast page for the whole week on one screen
+ *  (every day's 96-block average in one chart, the average 96-block profile, error analysis and
+ *  period breakdown) — see components/dayahead/DemandPeriodForecast.tsx. */
+export function DemandWeekAhead() {
+  return <DemandPeriodForecast kind="week" />;
+}
+
+/** All modules → Demand (and Command centre → Demand Forecast) keep the 9-card week grid. */
+export const DemandWeekAheadModule = DemandWeekAheadGrid;

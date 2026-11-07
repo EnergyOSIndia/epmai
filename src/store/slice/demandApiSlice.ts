@@ -24,6 +24,7 @@ const initialState: DemandState = {
     weekLoading: false,
     weekError: null,
     dayData: null,
+    dayDataId: null,
     dayLoading: false,
     dayError: null,
     dayRequestId: null,
@@ -133,14 +134,15 @@ export const fetchWeekDemandForecast = createAsyncThunk<
     return transformDemandRows(json.rows);
 });
 
-// 3. Day-ahead Thunk (data_id=102110, from_date = to_date): System Forecast for one date, plus —
+// 3. Day-ahead Thunk (data_id=102110 by default — 102120 / 102130 for the Week / Month-ahead
+// forecast of a date; from_date = to_date): System Forecast for one date, plus —
 // for today or earlier — Actual, Roastering, MAPE and UDM per block and the error bands.
 // Also fetches the Manual forecast (if any) from the tuneup API.
-export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string }>(
+export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string; data_id?: number }>(
     "demand/fetchDayAhead",
-    async ({ date }) => {
+    async ({ date, data_id = 102110 }) => {
         const query = new URLSearchParams({
-            data_id: "102110",
+            data_id: String(data_id),
             from_date: date,
             to_date: date,
             location_id: "10030",
@@ -159,7 +161,7 @@ export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string }>(
         // Fetch Manual forecast from demand-forcast API (same table, forecasted_by=Manual)
         try {
             const manualQuery = new URLSearchParams({
-                data_id: "102110",
+                data_id: String(data_id),
                 from_date: date,
                 to_date: date,
                 location_id: "10030",
@@ -474,6 +476,7 @@ export const demandSlice = createSlice({
                 if (action.meta.requestId !== state.dayRequestId) return;
                 state.dayLoading = false;
                 state.dayData = action.payload;
+                state.dayDataId = action.meta.arg.data_id ?? 102110;
             })
             .addCase(fetchDayAhead.rejected, (state, action) => {
                 if (action.meta.requestId !== state.dayRequestId) return;

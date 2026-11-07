@@ -35,14 +35,15 @@ export type DayForecast = {
   error: string | null;
 };
 
-/** System Forecast, Actual and Manual for one date, from the day-ahead API via Redux. */
-export function useDayForecast(date: string): DayForecast {
+/** System Forecast, Actual and Manual for one date, from the day-ahead API via Redux. `dataId`
+ *  picks the horizon: 102110 Day ahead (default), 102120 Week ahead, 102130 Month ahead. */
+export function useDayForecast(date: string, dataId = 102110): DayForecast {
   const dispatch = useAppDispatch();
-  const { dayData, dayLoading, dayError } = useAppSelector((s) => s.demand);
+  const { dayData, dayDataId, dayLoading, dayError } = useAppSelector((s) => s.demand);
   useEffect(() => {
-    dispatch(fetchDayAhead({ date }));
-  }, [dispatch, date]);
-  const day = dayData?.date === date ? dayData : null;
+    dispatch(fetchDayAhead({ date, data_id: dataId }));
+  }, [dispatch, date, dataId]);
+  const day = dayData?.date === date && dayDataId === dataId ? dayData : null;
   return {
     forecast: day?.forecast ?? null, actual: day?.actual ?? null, mape: day?.mape ?? null, roastering: day?.roastering ?? null, udm: day?.udm ?? null,
     manual: day?.manual ?? null,

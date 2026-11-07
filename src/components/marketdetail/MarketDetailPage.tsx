@@ -6,9 +6,10 @@ import { HeaderControls } from "./HeaderControls";
 import { MarketChartModal, type ModalChart } from "./MarketChartModal";
 import { LABEL_W, MarketRow } from "./MarketRow";
 import {
-  EXCHANGES, MARKETS, MIN_ROW_H, getCurrentBlock, getTodayDate, emptyMarketDetail, loadMarketDetail,
-  type Exchange, type MarketDetailData,
+  EXCHANGES, MARKETS, MIN_ROW_H, getCurrentBlock, getTodayDate, type Exchange,
 } from "./marketDetailData";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchMarketDay } from "@/store/slice/marketApiSlice";
 
 /** Market Detail: RTM / DAM / GDAM / HPDAM clearing per exchange (IEX, PXIL, HPX) for a date,
  *  with an optional table of the chosen block. Fills the window; only the chart area scrolls. */
@@ -16,23 +17,14 @@ export function MarketDetailPage() {
   // The date loads as soon as it changes; the block only picks the table's column of numbers.
   const [date, setDate] = useState(getTodayDate);
   const [block, setBlock] = useState(getCurrentBlock);
-  const [data, setData] = useState<{ date: string; detail: MarketDetailData } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const dispatch = useAppDispatch();
+  const { day: data, dayLoading: loading, dayError: error } = useAppSelector((state) => state.market);
 
   const [active, setActive] = useState<Set<Exchange>>(() => new Set(EXCHANGES));
   const [table, setTable] = useState(false);
 
-  useEffect(() => {
-    // Stepping quickly through dates: only the latest date's answer is kept.
-    let stale = false;
-    setLoading(true);
-    loadMarketDetail(date)
-      .then((detail) => { if (!stale) { setData({ date, detail }); setError(null); } })
-      .catch((e) => { if (!stale) { setData({ date, detail: emptyMarketDetail() }); setError(e instanceof Error ? e.message : String(e)); } })
-      .finally(() => { if (!stale) setLoading(false); });
-    return () => { stale = true; };
-  }, [date]);
+  // Stepping quickly through dates: the slice keeps only the latest date's answer.
+  useEffect(() => { dispatch(fetchMarketDay({ date })); }, [dispatch, date]);
 
   const exchanges = EXCHANGES.filter((e) => active.has(e));
   // At least one exchange always stays on.

@@ -1,30 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
-import { loadMarketRange, type MarketDetailData } from "./marketDetailData";
+import { useCallback, useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchMarketRange } from "@/store/slice/marketApiSlice";
 
-/** Week / Month ahead data: every market and exchange for from..to, cached in IndexedDB.
- *  `sync` (Sync DB) re-calls the API and reports whether anything changed. */
+/** Week / Month ahead data: every market and exchange for from..to, from the market slice
+ *  (cached in IndexedDB). `sync` (Sync) re-calls the API and reports whether anything changed. */
 export function useMarketRange(from: string, to: string) {
-  const [state, setState] = useState<{ key: string; days: Record<string, MarketDetailData> } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const key = `${from}:${to}`;
+  const dispatch = useAppDispatch();
+  const { range, rangeLoading, rangeError } = useAppSelector((state) => state.market);
 
-  useEffect(() => {
-    // Stepping quickly through weeks / months: only the latest range's answer is kept.
-    let stale = false;
-    setError(null);
-    loadMarketRange(from, to)
-      .then((r) => { if (!stale) setState({ key, days: r.days }); })
-      .catch((e) => { if (!stale) { setState({ key, days: {} }); setError(e instanceof Error ? e.message : String(e)); } });
-    return () => { stale = true; };
-  }, [from, to, key]);
+  useEffect(() => { dispatch(fetchMarketRange({ from_date: from, to_date: to })); }, [dispatch, from, to]);
 
   const sync = useCallback(async () => {
-    const r = await loadMarketRange(from, to, true);
-    setState({ key, days: r.days });
-    setError(null);
+    const r = await dispatch(fetchMarketRange({ from_date: from, to_date: to, sync: true })).unwrap();
     return r.changed;
-  }, [from, to, key]);
+  }, [dispatch, from, to]);
 
-  const ready = state?.key === key;
-  return { days: ready ? state.days : null, loading: !ready, error, sync };
+  const ready = range?.from === from && range?.to === to && !rangeLoading;
+  return { days: ready ? range.days : null, loading: !ready, error: rangeError, sync };
 }
