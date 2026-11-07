@@ -191,7 +191,7 @@ export function WeekSupplyGrid({
         currentDate.setDate(currentDate.getDate() + offset);
 
         const iso = toIsoDate(currentDate);
-        const y = currentDate.getFullYear();
+        // const y = currentDate.getFullYear();
         const m = currentDate.getMonth() + 1;
         const d = currentDate.getDate();
         const weekday = currentDate.getDay();
