@@ -141,6 +141,8 @@ export interface DemandState {
     weekLoading: boolean;
     weekError: string | null;
     dayData: DayAheadData | null;
+    /** The day_ahead data_id `dayData` came from: 102110 Day / 102120 Week / 102130 Month ahead. */
+    dayDataId: number | null;
     dayLoading: boolean;
     dayError: string | null;
     dayRequestId: string | null;

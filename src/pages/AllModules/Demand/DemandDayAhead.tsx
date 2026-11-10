@@ -20,11 +20,13 @@ import { cv } from "@/components/chart/colors";
 const n2 = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const card = "min-h-0 rounded-xl border bg-card p-3";
 
-export function DemandDayAhead() {
+/** The Forecast page for one date. Day ahead uses the defaults; Week / Month ahead pass their
+ *  day_ahead `dataId` (102120 / 102130), their last date and the chart title. */
+export function DemandDayAhead({ dataId = 102110, maxDate: lastDate, title }: { dataId?: number; maxDate?: string; title?: string } = {}) {
   const [date, setDate] = useState(todayIso);
   const [location, setLocation] = useState("BH_AL");
-  // Up to a week ahead of today, any day back.
-  const maxDate = useMemo(() => { const d = new Date(NOW); d.setDate(d.getDate() + 7); return isoDate(d); }, []);
+  // Up to a week ahead of today (unless the horizon gives its own last date), any day back.
+  const maxDate = useMemo(() => { if (lastDate) return lastDate; const d = new Date(NOW); d.setDate(d.getDate() + 7); return isoDate(d); }, [lastDate]);
 
   // Fill the viewport below the page's own top edge, so nothing scrolls.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -38,15 +40,16 @@ export function DemandDayAhead() {
 
   return (
     <div ref={rootRef} className="flex min-h-[640px] flex-col gap-2.5" style={{ height: `calc(100vh - ${top}px - 16px)`, marginTop: -16, marginBottom: -64 }}>
-      <ForecastTab date={date} setDate={setDate} maxDate={maxDate} location={location} setLocation={setLocation} />
+      <ForecastTab date={date} setDate={setDate} maxDate={maxDate} location={location} setLocation={setLocation} dataId={dataId} title={title} />
     </div>
   );
 }
 
-function ForecastTab({ date, setDate, maxDate, location, setLocation }: {
+function ForecastTab({ date, setDate, maxDate, location, setLocation, dataId, title }: {
   date: string; setDate: (d: string) => void; maxDate: string; location: string; setLocation: (l: string) => void;
+  dataId: number; title?: string;
 }) {
-  const { forecast, actual, mape, roastering, udm, manual, errorRanges, loading, error } = useDayForecast(date);
+  const { forecast, actual, mape, roastering, udm, manual, errorRanges, loading, error } = useDayForecast(date, dataId);
   const actuals = useMemo(() => (forecast ? buildActuals(forecast, { actual, mape, roastering, udm, manual }) : null), [forecast, actual, mape, roastering, udm, manual]);
   const weather = useWeather(date);
   const wxDay = weather.days[location];
@@ -72,7 +75,7 @@ function ForecastTab({ date, setDate, maxDate, location, setLocation }: {
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-12">
         <div className="flex min-h-0 flex-col gap-2.5 lg:col-span-8">
-          <div className={cn(card, "flex-1")}><ForecastChart forecast={forecast} actuals={actuals} date={date} /></div>
+          <div className={cn(card, "flex-1")}><ForecastChart forecast={forecast} actuals={actuals} date={date} title={title} /></div>
           <div className={cn(card, "flex-1")}>
             <WeatherCard weather={weather} date={date} location={location} onLocation={setLocation} />
           </div>
@@ -143,4 +146,4 @@ function Skeleton({ dateCtl }: { dateCtl: ReactNode }) {
 }
 
 /** All modules → Demand shows the same view as the Planning horizon. */
-export const DemandDayAheadModule = DemandDayAhead;
+export const DemandDayAheadModule = () => <DemandDayAhead />;

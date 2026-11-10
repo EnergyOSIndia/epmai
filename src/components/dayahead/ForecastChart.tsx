@@ -42,6 +42,9 @@ function useLiveBlock(active: boolean) {
 /** "13:45" → "56": the block number (1–96) of a block's start time. */
 const blockNo = (t: string) => { const [h, m] = t.split(":").map(Number); return String(h * 4 + Math.floor(m / 15) + 1); };
 
+// Small cards: label every 4th block and always the last one (1, 5, 9 … 93, 96), so the axis
+// reads all the way to block 96.
+const COMPACT_TICKS = [...Array.from({ length: 24 }, (_, i) => blockTime(i * 4)), blockTime(95)];
 const kfmt = (v: number) => (Math.abs(v) >= 1000 ? +(v / 1000).toFixed(1) + "k" : String(Math.round(v)));
 
 function ChartTip({ active, payload, hidden, items, coordinate, floatIn }: {
@@ -102,8 +105,10 @@ function download(name: string, href: string) {
 
 /** Card A: 96-block day-ahead forecast. Actual / UDM (yellow) / Roastering / MAPE only when `actuals` is given
  *  (today or earlier); Manual Forecast + Manual MAPE only when that data exists. */
-export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false }: {
+export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast" }: {
   forecast: number[]; actuals: Actuals | null; date: string;
+  /** Title over the full-size chart. */
+  title?: string;
   /** Small-card mode (Week ahead grid): no title bar, export menu or legend; smaller axes. */
   compact?: boolean;
   /** Tiny-box mode (Month ahead calendar): compact and no axes at all — just the plot and tooltip. */
@@ -194,7 +199,7 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
     <div className="flex h-full min-h-0 flex-col">
       {!compact && (
       <div className="mb-1 flex items-center justify-between">
-        <div className="text-[13px] font-bold">96-Block Day-Ahead Forecast</div>
+        <div className="text-[13px] font-bold">{title}</div>
         <div className="relative">
           <button type="button" aria-label="Export chart" onClick={() => setMenu((m) => !m)}
             className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -214,7 +219,7 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
           <ComposedChart data={rows} margin={bare ? { top: 2, right: 0, bottom: 0, left: 0 } : { top: 6, right: 4, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
             {/* x-axis in block numbers (1–96, every other one labelled); the tooltip keeps the time range */}
-            <XAxis hide={bare} dataKey="t" interval={compact ? 3 : 1} height={compact ? 16 : 22} tickLine={false} axisLine={false} tick={{ fontSize: compact ? 8.5 : 9.5 }} tickFormatter={blockNo} />
+            <XAxis hide={bare} dataKey="t" ticks={compact ? COMPACT_TICKS : undefined} interval={compact ? 0 : 1} height={compact ? 18 : 22} tickLine={false} axisLine={false} tick={{ fontSize: compact ? 9 : 9.5 }} tickFormatter={blockNo} />
             <YAxis hide={bare} yAxisId="mw" domain={[lo, hi]} allowDataOverflow tickFormatter={kfmt} tickLine={false} axisLine={false} width={compact ? 42 : 40} tick={{ fontSize: compact ? 9 : 10 }} />
             <YAxis hide={bare} yAxisId="pct" orientation="right" domain={[0, pctMax]} ticks={pctTicks} allowDataOverflow tickLine={false} axisLine={false} width={compact ? 18 : 24} tick={{ fontSize: compact ? 9 : 10 }} />
             {/* bars first so they sit behind the lines */}

@@ -7,13 +7,14 @@ import { MonthNavigator } from "@/components/weeksupply/MonthNavigator";
 import { isMonthParam, isoOf, monthDays, monthParam, monthStart, parseIso, todayIso } from "@/components/weeksupply/weekSupplyData";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchMonthDayAhead } from "@/store/slice/demandApiSlice";
+import { DemandPeriodForecast } from "@/components/dayahead/DemandPeriodForecast";
 
 /** Demand · Month ahead — Planning-horizon view. Same Mon–Sun calendar as Supply's month ahead:
  *  one box per date (day number, peak forecast, forecast energy) with a tiny Day-ahead forecast
  *  chart (Actual, UDM, System Forecast, Roastering, MAPE) from the day_ahead API with data_id 102130, cached in IndexedDB (Sync DB re-checks the API).
  *  Click a day to open it full size. Opens on the current month; goes forward up to next month and
  *  back freely. The month lives in the URL (?month=2026-10). */
-export function DemandMonthAhead() {
+function DemandMonthAheadCalendar() {
   const dispatch = useAppDispatch();
   const { monthAhead, monthAheadLoading, monthAheadError } = useAppSelector((state) => state.demand);
   const search = useSearch({ strict: false }) as { month?: string };
@@ -132,5 +133,12 @@ export function DemandMonthAhead() {
   );
 }
 
-/** All modules → Demand shows the same view as the Planning horizon. */
-export const DemandMonthAheadModule = DemandMonthAhead;
+/** Demand · Month ahead — Planning horizon: the Forecast page for the whole month on one screen
+ *  (every day's 96-block average in one chart, the average 96-block profile, error analysis and
+ *  period breakdown) — see components/dayahead/DemandPeriodForecast.tsx. */
+export function DemandMonthAhead() {
+  return <DemandPeriodForecast kind="month" />;
+}
+
+/** All modules → Demand (and Command centre → Demand Forecast) keep the month calendar. */
+export const DemandMonthAheadModule = DemandMonthAheadCalendar;

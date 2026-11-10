@@ -35,7 +35,9 @@ export function CellPage() {
   // Demand's "Demand Forecast" (acc) cell view is the same full dashboard as the Planning
   // horizon for this horizon — rendered bare (no PageHead/Section/footer), exactly like /horizon.
   if (isDashboard) {
-    const Page = MODULE_PAGES[mod].horizons[tf].Plan;
+    // The All-modules page: Week / Month ahead keep their grid / calendar here (Day ahead is the same);
+    // Year ahead shows the Planning-horizon Forecast page (the whole year on one screen).
+    const Page = tf === "yr" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
     return <Page />;
   }
 

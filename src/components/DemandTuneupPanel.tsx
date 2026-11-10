@@ -15,13 +15,74 @@ import {
 import { cityOf, useWeather } from "@/lib/dayahead";
 import { WeatherCard } from "@/components/dayahead/WeatherCard";
 import type { TfId } from "@/data/engine";
+import { store } from "@/store/store";
+import type {
+  ApplyRequest, BlockMap, EnsembleRequest, ManualForecastRequest, ModelStats, Rule, RuleHistory, RuleIn, SetLineRequest,
+  SimilarDay, TuneupConfig, TuneupForecast, WeatherMulti,
+} from "@/store/features/tuneupTypes";
 import {
-  DEFAULT_TUNEUP_LOCATION, TUNEUP_ACTIONS, tuneupToday, addRule, clearRules, deleteRule, getRules, getSimilarDays, getTuneupConfig,
-  getTuneupForecast, getWeatherMulti, peekRules, peekSimilarDays, peekTuneupConfig, peekTuneupForecast, peekWeatherMulti, postApply, postEnsemble, postManualForecast, postReset,
-  postSetline, redoRules, reorderRules, undoRules, updateRule,
-  type BlockMap, type ModelStats, type Rule, type RuleHistory, type SimilarDay, type TuneupConfig,
-  type TuneupForecast, type WeatherMulti,
-} from "@/lib/tuneupApi";
+  DEFAULT_TUNEUP_LOCATION, TUNEUP_ACTIONS, addTuneupRule, clearTuneupRules, deleteTuneupRule, fetchSavedTuneupConfig,
+  fetchSimilarDays, fetchTuneupConfig, fetchTuneupForecast, fetchTuneupRules, fetchTuneupWeather, forecastKey,
+  postApply as postApplyThunk, postEnsemble as postEnsembleThunk, postManualForecast as postManualForecastThunk,
+  postReset as postResetThunk, postSetline as postSetlineThunk, redoTuneupRules, reorderTuneupRules, rulesKey,
+  similarKey, tuneupToday, undoTuneupRules, updateTuneupRule, weatherKey,
+} from "@/store/slice/tuneupApiSlice";
+
+// ── tuneup API, through the tuneup slice (store/slice/tuneupApiSlice.ts) ──
+// Each call dispatches the slice's thunk and returns its answer; `peek…` read the answer the
+// slice remembered last, shown at once while a fresh copy loads (the API is slow).
+const run = store.dispatch;
+const tuneup = () => store.getState().tuneup;
+const getTuneupConfig = () => run(fetchTuneupConfig()).unwrap();
+const peekTuneupConfig = async (): Promise<TuneupConfig | undefined> =>
+  tuneup().config ?? (await run(fetchSavedTuneupConfig()).unwrap()) ?? undefined;
+const getTuneupForecast = (date: string, location_id: number) => run(fetchTuneupForecast({ date, location_id })).unwrap();
+const peekTuneupForecast = (date: string, location_id: number): TuneupForecast | undefined => tuneup().forecasts[forecastKey(date, location_id)];
+const getRules = (location_id: number, date: string) => run(fetchTuneupRules({ location_id, date })).unwrap();
+const peekRules = (location_id: number, date: string) => tuneup().rules[rulesKey({ location_id, date })];
+const getSimilarDays = async (date: string, location_id: number, weather_location_id: string) =>
+  ({ similar_days: await run(fetchSimilarDays({ date, location_id, weather_location_id })).unwrap() });
+const peekSimilarDays = (date: string, location_id: number, weather_location_id: string) => {
+  const d = tuneup().similarDays[similarKey(date, location_id, weather_location_id)];
+  return d ? { similar_days: d } : undefined;
+};
+const getWeatherMulti = (date: string, location_id: number, weather_location_id?: string, ref_date?: string) =>
+  run(fetchTuneupWeather({ date, location_id, weather_location_id, ref_date })).unwrap();
+const peekWeatherMulti = (date: string, location_id: number, weather_location_id?: string, ref_date?: string): WeatherMulti | undefined =>
+  tuneup().weather[weatherKey(date, location_id, weather_location_id, ref_date)];
+const postSetline = (payload: SetLineRequest) => run(postSetlineThunk(payload)).unwrap();
+const postManualForecast = (payload: ManualForecastRequest) => run(postManualForecastThunk(payload)).unwrap();
+const postReset = (payload: { date: string; location_id: number }) => run(postResetThunk(payload)).unwrap();
+const postEnsemble = (payload: EnsembleRequest) => run(postEnsembleThunk(payload)).unwrap();
+const postApply = (payload: ApplyRequest) => run(postApplyThunk(payload)).unwrap();
+const addRule = (location_id: number, date: string, rule: RuleIn) => run(addTuneupRule({ location_id, date, rule })).unwrap();
+const updateRule = (rule_id: string, location_id: number, date: string, patch: Partial<RuleIn>) =>
+  run(updateTuneupRule({ rule_id, location_id, date, patch })).unwrap();
+const deleteRule = (rule_id: string, location_id: number, date: string) => run(deleteTuneupRule({ rule_id, location_id, date })).unwrap();
+const clearRules = (location_id: number, date: string) => run(clearTuneupRules({ location_id, date })).unwrap();
+const reorderRules = (location_id: number, date: string, ordered_ids: string[]) =>
+  run(reorderTuneupRules({ location_id, date, ordered_ids })).unwrap();
+const undoRules = (location_id: number, date: string) => run(undoTuneupRules({ location_id, date })).unwrap();
+const redoRules = (location_id: number, date: string) => run(redoTuneupRules({ location_id, date })).unwrap();
+
+/** Warm the tab before it is opened: config, then today's forecast, rules, similar days and
+ *  weather for the selected location. Errors are ignored — the tab loads normally then. */
+function prefetchTuneup(): void {
+  const date = tuneupToday();
+  getTuneupForecast(date, DEFAULT_TUNEUP_LOCATION).catch(() => {});
+  getRules(DEFAULT_TUNEUP_LOCATION, date).catch(() => {});
+  getTuneupConfig().then((cfg) => {
+    const loc = cfg.selected_location ?? cfg.locations[0] ?? DEFAULT_TUNEUP_LOCATION;
+    const city = cfg.weather_locations[0];
+    if (loc !== DEFAULT_TUNEUP_LOCATION) { getTuneupForecast(date, loc).catch(() => {}); getRules(loc, date).catch(() => {}); }
+    if (city) { getSimilarDays(date, loc, city).catch(() => {}); getWeatherMulti(date, loc, city).catch(() => {}); }
+  }).catch(() => {});
+}
+// Start as soon as the app has loaded (idle), so opening Demand Tune up doesn't wait on the API.
+if (typeof window !== "undefined") {
+  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
+  if (ric) ric(prefetchTuneup, { timeout: 2000 }); else setTimeout(prefetchTuneup, 800);
+}
 
 const SYS_COLOR = "#0f766e"; // teal — System Forecast
 const MOD_COLOR = "#7c3aed"; // purple — Preview of a Change (dashed, not saved yet)
