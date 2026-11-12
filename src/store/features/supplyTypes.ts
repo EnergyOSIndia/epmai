@@ -43,6 +43,27 @@ export interface SupplyDayDetail {
     technology: { name: string; central: number[]; state: number[]; data: number[] }[];
 }
 
+/** plant-supply/avg-supply?from_date&to_date&group_by&include_blocks — each category (or technology)
+ *  averaged over the period: its overall average SG and its 96 block averages. */
+export interface AvgSupplyApiResponse {
+    from_date: string;
+    to_date: string;
+    days: number;
+    group_by: string;
+    count: number;
+    category_avg?: { category: string; avg_sg: number | null; blocks: (number | null)[] }[];
+    technology_avg?: { technology: string; avg_sg: number | null; blocks: (number | null)[] }[];
+}
+
+/** One period's average supply per group (Planning horizon Day / Week / Month ahead). */
+export interface AvgSupply {
+    from: string;
+    to: string;
+    groupBy: SupplyGraph;
+    days: number;
+    series: { name: string; avg: number; data: number[] }[];
+}
+
 export interface SupplyState {
     week: SupplyRange | null;
     weekLoading: boolean;
@@ -58,4 +79,15 @@ export interface SupplyState {
     dayLoading: boolean;
     dayError: string | null;
     dayRequestId: string | null;
+    // Planning horizon Week / Month / Year ahead: the period's days averaged block by block (both
+    // graphs, central / state kept), cached in IndexedDB.
+    period: { from: string; to: string; days: number; detail: SupplyDayDetail | null } | null;
+    periodLoading: boolean;
+    periodError: string | null;
+    periodRequestId: string | null;
+    // Planning horizon Day / Week / Month ahead: avg-supply for the period and graph type.
+    avg: AvgSupply | null;
+    avgLoading: boolean;
+    avgError: string | null;
+    avgRequestId: string | null;
 }

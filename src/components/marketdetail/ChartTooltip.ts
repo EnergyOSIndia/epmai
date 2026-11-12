@@ -10,11 +10,11 @@ export function chartTooltipHtml(ctx: any): string {
   const rows = (ctx.points ?? [])
     .map((p: any) => `<tr>
       <td style="color:${p.series.color};font-weight:600;padding:1px 12px 1px 0">${p.series.name}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;color:#111827">${Number(p.y).toFixed(2)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:hsl(var(--popover-foreground))">${Number(p.y).toFixed(2)}</td>
     </tr>`)
     .join("");
   return `<div style="font-size:11px;min-width:150px">
-    <div style="font-weight:700;color:#111827;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid #eef0f4">Block ${block} (${a}–${b})</div>
+    <div style="font-weight:700;color:hsl(var(--popover-foreground));padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid hsl(var(--border))">Block ${block} (${a}–${b})</div>
     <table style="width:100%;border-collapse:collapse">${rows}</table>
   </div>`;
 }

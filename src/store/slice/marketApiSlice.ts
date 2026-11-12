@@ -20,6 +20,10 @@ const initialState: MarketState = {
     rangeLoading: false,
     rangeError: null,
     rangeRequestId: null,
+    period: null,
+    periodLoading: false,
+    periodError: null,
+    periodRequestId: null,
 };
 
 const BLOCKS = 96;
@@ -98,6 +102,56 @@ export const fetchMarketRange = createAsyncThunk<
     return { from: from_date, to: to_date, days, changed };
 });
 
+/** Block-by-block average of several days, per market and exchange: each value averages the days
+ *  that have it; null where none do. */
+function averageMarketDays(days: MarketDetailData[]): MarketDetailData {
+    const keys = ["buyMW", "sellMW", "mcvMW", "acvMW", "mcpPrice", "acpPrice"] as const;
+    const out = emptyMarketDetail();
+    for (const m of MARKETS) for (const e of EXCHANGES) {
+        out[m][e] = out[m][e].map((p, i) => {
+            const q = { ...p };
+            for (const k of keys) {
+                const vals = days.map((d) => d[m][e][i][k]).filter((v): v is number => v !== null);
+                q[k] = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
+            }
+            return q;
+        });
+    }
+    return out;
+}
+
+/** from..to split into ranges of at most 31 days (the API's limit), by calendar month. */
+function chunks31(from: string, to: string): [string, string][] {
+    const out: [string, string][] = [];
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    for (let d = new Date(from + "T00:00:00"); iso(d) <= to; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+        const end = iso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+        out.push([iso(d), end < to ? end : to]);
+    }
+    return out;
+}
+
+// 3. Planning horizon Week / Month / Year ahead: market-graph for the whole period (one call per
+// ≤31 days), averaged block by block into one "average day". Only the small average is cached in
+// IndexedDB (key market-graph-avg:<from>:<to>); `sync: true` re-calls the API.
+export const fetchMarketPeriod = createAsyncThunk<
+    { from: string; to: string; days: number; detail: MarketDetailData; changed: boolean },
+    MarketQueryParams
+>("market/fetchMarketPeriod", async ({ from_date, to_date, sync }) => {
+    const { value, changed } = await cachedJson(`market-graph-avg:${from_date}:${to_date}`, async () => {
+        const parts = await Promise.all(chunks31(from_date, to_date).map(([f, t]) => getMarketGraph(f, t).then((json) => ({ json, f, t }))));
+        const days: MarketDetailData[] = [];
+        for (const { json, f, t } of parts) {
+            for (const date of datesBetween(f, t)) {
+                const d = transformMarketDay(json, date);
+                if (MARKETS.some((m) => EXCHANGES.some((e) => d[m][e].some((p) => p.buyMW !== null)))) days.push(d);
+            }
+        }
+        return { days: days.length, detail: days.length ? averageMarketDays(days) : emptyMarketDetail() };
+    }, sync);
+    return { from: from_date, to: to_date, ...value, changed };
+});
+
 export const marketSlice = createSlice({
     name: "market",
     initialState,
@@ -121,6 +175,28 @@ export const marketSlice = createSlice({
                 // API only: on failure every chart shows "No data available" under the error.
                 state.day = { date: action.meta.arg.date, detail: emptyMarketDetail() };
                 state.dayError = action.error.message || "Failed to load market data";
+            });
+
+        // Planning horizon Week / Month / Year (average day) Handlers
+        builder
+            .addCase(fetchMarketPeriod.pending, (state, action) => {
+                state.periodRequestId = action.meta.requestId;
+                // A Sync keeps the current charts on screen while it checks the API.
+                if (!action.meta.arg.sync) state.periodLoading = true;
+                state.periodError = null;
+            })
+            .addCase(fetchMarketPeriod.fulfilled, (state, action) => {
+                if (action.meta.requestId !== state.periodRequestId) return;
+                state.periodLoading = false;
+                const { from, to, days, detail } = action.payload;
+                state.period = { from, to, days, detail };
+            })
+            .addCase(fetchMarketPeriod.rejected, (state, action) => {
+                if (action.meta.requestId !== state.periodRequestId) return;
+                state.periodLoading = false;
+                if (action.meta.arg.sync) return;
+                state.period = { from: action.meta.arg.from_date, to: action.meta.arg.to_date, days: 0, detail: emptyMarketDetail() };
+                state.periodError = action.error.message || "Failed to load market data";
             });
 
         // Week / Month Ahead Handlers

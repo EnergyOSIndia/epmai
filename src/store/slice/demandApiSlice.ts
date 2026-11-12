@@ -8,6 +8,9 @@ import type {
     DayAheadData,
     LongTermSeason,
     LongTermSeasonApiResponse,
+    MeanDemandData,
+    MeanDemandForecastApiResponse,
+    MeanForecastLine,
     Season,
     SeasonApiResponse,
     WeatherApiResponse,
@@ -47,6 +50,10 @@ const initialState: DemandState = {
     monthAheadLoading: false,
     monthAheadError: null,
     monthAheadRequestId: null,
+    mean: null,
+    meanLoading: false,
+    meanError: null,
+    meanRequestId: null,
     longTermData: null,
     longTermLoading: false,
     longTermError: null,
@@ -262,6 +269,47 @@ export const fetchWeekDayAhead = createAsyncThunk<RangeOut, RangeArgs>(
 export const fetchMonthDayAhead = createAsyncThunk<RangeOut, RangeArgs>(
     "demand/fetchMonthDayAhead",
     ({ from_date, to_date, sync }) => loadDayAheadRange(102130, from_date, to_date, sync),
+);
+
+// 3d. Planning-horizon Thunk (mean-demand-forecast): the saved forecast of one period — a date
+// (102110), a Mon–Sun week (102120), a calendar month (102130) or a calendar year (102140) — as one
+// 96-block line per forecaster (System / Manual); actual, MAPE, roastering and UDM once it's over.
+// A period with nothing saved (404 forecast_not_found) comes back empty, not as an error.
+export const fetchMeanDemandForecast = createAsyncThunk<MeanDemandData, { data_id: number; from_date: string; to_date: string }>(
+    "demand/fetchMeanDemandForecast",
+    async ({ data_id, from_date, to_date }) => {
+        const query = new URLSearchParams({ data_id: String(data_id), location_id: "10030", from_date, to_date });
+        const res = await fetch(`${BASE_URL}mean-demand-forecast?${query.toString()}`, {
+            headers: { accept: "*/*" },
+        });
+        const empty: MeanDemandData = { dataId: data_id, from: from_date, to: to_date, period: "", status: "not_found", system: null, manual: null };
+        if (res.status === 404) return empty;
+        if (!res.ok) {
+            let detail = res.statusText;
+            try { const body = await res.json(); detail = body?.detail?.message ?? detail; } catch { /* keep statusText */ }
+            throw new Error(`Failed to fetch forecast: ${detail}`);
+        }
+        const json: MeanDemandForecastApiResponse = await res.json();
+        // One forecaster → 96-block arrays; a field becomes null when any block lacks it.
+        const line = (f: MeanDemandForecastApiResponse["forecasts"][number] | undefined): MeanForecastLine | null => {
+            if (!f?.blocks?.length) return null;
+            const byBlock = [...f.blocks].sort((a, b) => a.block - b.block);
+            const col = (pick: (b: MeanDemandForecastApiResponse["forecasts"][number]["blocks"][number]) => number | undefined) => {
+                const a = Array.from({ length: 96 }, (_, i) => Number(pick(byBlock[i] ?? ({} as never))));
+                return a.some((v) => Number.isNaN(v)) ? null : a;
+            };
+            const forecast = col((b) => b.forecast_value);
+            if (!forecast) return null;
+            return {
+                forecast,
+                actual: col((b) => b.actual_value), mape: col((b) => b.mape),
+                roastering: col((b) => b.roastering), udm: col((b) => b.udm),
+                periodMape: f.period_mape ?? null,
+            };
+        };
+        const by = (name: string) => json.forecasts?.find((f) => f.forecasted_by === name);
+        return { ...empty, period: json.ts_period, status: json.status, system: line(by("System")), manual: line(by("Manual")) };
+    },
 );
 
 // 4. Year-ahead Thunk (data_id=102140). Cache-first: the saved IndexedDB copy is used when there
@@ -520,6 +568,25 @@ export const demandSlice = createSlice({
                 if (action.meta.requestId !== state.monthAheadRequestId) return;
                 state.monthAheadLoading = false;
                 state.monthAheadError = action.error.message || "Failed to load month forecast";
+            });
+
+        // Planning horizon (mean-demand-forecast) Handlers — only the latest request may land.
+        builder
+            .addCase(fetchMeanDemandForecast.pending, (state, action) => {
+                state.meanRequestId = action.meta.requestId;
+                state.meanLoading = true;
+                state.meanError = null;
+            })
+            .addCase(fetchMeanDemandForecast.fulfilled, (state, action) => {
+                if (action.meta.requestId !== state.meanRequestId) return;
+                state.meanLoading = false;
+                state.mean = action.payload;
+            })
+            .addCase(fetchMeanDemandForecast.rejected, (state, action) => {
+                if (action.meta.requestId !== state.meanRequestId) return;
+                state.meanLoading = false;
+                state.mean = null;
+                state.meanError = action.error.message || "Failed to load forecast";
             });
 
         // Year Ahead Handlers

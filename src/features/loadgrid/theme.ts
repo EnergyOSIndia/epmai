@@ -31,10 +31,8 @@ function hexToRgba(hex: string, a: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 
-// Fixed LIGHT canvas for the charts (white plot area, dark slate text / grid),
-// so the grid always reads as light charts regardless of the app's light/dark
-// mode. Only the DATA colours (series line, box, median) follow the selected
-// theme — keeping the charts on-brand without turning the canvas dark.
+// Canvas colours (text, grid, axis, tooltip) for light / dark; readTheme() picks the one the app
+// currently shows, so the charts follow the app theme like the rest of the page.
 const LIGHT = {
   text: "#334155", // slate-700
   muted: "#64748b", // slate-500
@@ -43,11 +41,22 @@ const LIGHT = {
   tooltipBg: "rgba(255,255,255,0.97)",
   tooltipText: "#334155",
 }
+const DARK = {
+  text: "#e2e8f0", // slate-200
+  muted: "#94a3b8", // slate-400
+  grid: "rgba(148,163,184,0.16)",
+  axis: "rgba(148,163,184,0.32)",
+  tooltipBg: "rgba(17,24,32,0.97)",
+  tooltipText: "#e2e8f0",
+}
+/** Whether the app shows dark right now: the computed colour-scheme of <html> (set by the theme). */
+const isDark = () => typeof window !== "undefined" && getComputedStyle(document.documentElement).colorScheme.includes("dark")
 
 function readTheme(): ChartTheme {
   const fallbackAccent = "#0d9488"
+  const canvas = isDark() ? DARK : LIGHT
   const base: ChartTheme = {
-    ...LIGHT,
+    ...canvas,
     accent: fallbackAccent,
     accentLine: hexToRgba(fallbackAccent, 0.5),
     accentFill: hexToRgba(fallbackAccent, 0.12),
@@ -70,7 +79,7 @@ function readTheme(): ChartTheme {
     accentHex ? hexToRgba(accentHex, a) : primary ? hsl(primary, a) : hexToRgba(base.accent, a)
 
   return {
-    ...LIGHT,
+    ...canvas,
     accent,
     accentLine: accentRgba(0.5),
     accentFill: accentRgba(0.16),
@@ -149,6 +158,9 @@ export function baseChart(t: ChartTheme, overrides: ChartOptions = {}): ChartOpt
       title: { style: { color: t.muted } },
     },
     ...overrides,
+    // `...overrides` replaces the whole `chart` block; keep the transparent canvas (the cell's
+    // themed background shows through) unless the chart sets its own.
+    ...(overrides.chart ? { chart: { backgroundColor: "transparent", ...overrides.chart } } : {}),
     tooltip: {
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,

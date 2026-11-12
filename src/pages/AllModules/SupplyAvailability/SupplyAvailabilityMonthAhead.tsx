@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { istNow } from "@/data/engine";
 import { SyncDbButton } from "@/components/SyncDbButton";
+import { SupplyPeriodPage } from "@/components/weeksupply/SupplyPeriodPage";
 import { SupplyDayModal } from "@/components/weeksupply/SupplyDayModal";
 import { MonthDayBox } from "@/components/weeksupply/MonthDayBox";
 import { GraphTypeDropdown } from "@/components/weeksupply/GraphTypeDropdown";
@@ -152,7 +153,8 @@ function MonthSupplyPage() {
 }
 
 /** Supply Availability · Month ahead — Planning-horizon view. */
-export const SupplyAvailabilityMonthAhead = MonthSupplyPage;
+/** Planning horizon: the Day-ahead page for the month's average day (see SupplyPeriodPage). */
+export const SupplyAvailabilityMonthAhead = () => <SupplyPeriodPage kind="month" />;
 
-/** All modules shows the same view as the Planning horizon. */
-export const SupplyAvailabilityMonthAheadModule = SupplyAvailabilityMonthAhead;
+/** All modules (and Command centre) keep the Graph Type grid / calendar. */
+export const SupplyAvailabilityMonthAheadModule = MonthSupplyPage;

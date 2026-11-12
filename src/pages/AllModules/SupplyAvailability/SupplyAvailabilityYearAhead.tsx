@@ -1,8 +1,9 @@
 import { PageHead } from "@/components/layout";
 import { DemandCalendar } from "@/components/DemandCalendar";
+import { SupplyPeriodPage } from "@/components/weeksupply/SupplyPeriodPage";
 
-/** Supply Availability · Year ahead — Planning-horizon view. */
-export function SupplyAvailabilityYearAhead() {
+/** Supply Availability · Year ahead — the year calendar. */
+function SupplyYearCalendar() {
   return (
     <>
       <PageHead title={null} />
@@ -15,5 +16,8 @@ export function SupplyAvailabilityYearAhead() {
   );
 }
 
-/** All modules shows the same view as the Planning horizon. */
-export const SupplyAvailabilityYearAheadModule = SupplyAvailabilityYearAhead;
+/** Planning horizon: the Day-ahead page for the calendar year's average day (see SupplyPeriodPage). */
+export const SupplyAvailabilityYearAhead = () => <SupplyPeriodPage kind="year" />;
+
+/** All modules (and Command centre) keep the year calendar. */
+export const SupplyAvailabilityYearAheadModule = SupplyYearCalendar;

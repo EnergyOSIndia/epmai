@@ -9,13 +9,14 @@ import { MarketChartModal, type ModalChart } from "@/components/marketdetail/Mar
 import { ToggleGroup } from "@/components/marketdetail/ExchangeToggles";
 import { EXCHANGES, MARKETS, averageBlocks, getCurrentBlock, type BlockPoint, type Exchange, type Market } from "@/components/marketdetail/marketDetailData";
 import { useMarketRange } from "@/components/marketdetail/useMarketRange";
+import { MarketDetailPage } from "@/components/marketdetail/MarketDetailPage";
 
 /** Market Intelligence · Week ahead — Planning-horizon view. Same grid as Supply / Demand's week
  *  ahead: Mon Tue Wed / Thu Fri Remarks (Mon–Fri average) / Sat Sun Remarks (Sat–Sun average),
  *  each card the day's market chart (Buy, Sell, MCP, ACP, ACV, MCV) for the chosen market and
  *  exchange (DAM · IEX by default) from /market-graph, cached in IndexedDB (Sync DB re-checks the
  *  API). Weeks run back freely and forward up to next week; the week lives in the URL (?week=…). */
-export function MarketIntelligenceWeekAhead() {
+function MarketIntelligenceWeekAheadPage() {
   const search = useSearch({ strict: false }) as { week?: string };
   const navigate = useNavigate();
   const [market, setMarket] = useState<Market>("DAM");
@@ -134,5 +135,8 @@ export function MarketIntelligenceWeekAhead() {
   );
 }
 
-/** All modules shows the same view as the Planning horizon. */
-export const MarketIntelligenceWeekAheadModule = MarketIntelligenceWeekAhead;
+/** Planning horizon: the Day-ahead Market Detail page for the week's average day. */
+export const MarketIntelligenceWeekAhead = () => <MarketDetailPage kind="week" />;
+
+/** All modules (and Command centre's own views) keep the week-ahead page as it was. */
+export const MarketIntelligenceWeekAheadModule = MarketIntelligenceWeekAheadPage;

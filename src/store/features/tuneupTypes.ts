@@ -1,3 +1,13 @@
+/** The tuneup horizon: a day, a Mon–Sun week or a calendar month. */
+export type TuneupHorizon = "day_ahead" | "week_ahead" | "month_ahead";
+
+/** The period every forecast / write call works on (from_date = to_date for a day). */
+export interface TuneupPeriod {
+    from_date: string;
+    to_date: string;
+    horizon: TuneupHorizon;
+}
+
 /** Blocks are 1..96, keyed as strings by the API; values may be null when unknown. */
 export type BlockMap = Record<string, number | null>;
 
@@ -19,9 +29,14 @@ export interface TuneupConfig {
     weather_weights: Record<string, number>;
 }
 
-/** tuneup/forecast?date&location_id — every model's 96 blocks (System, Manual …) for a date. */
+/** tuneup/forecast?from_date&to_date&location_id&horizon — every model's 96 blocks (System,
+ *  Manual …) for the period, plus actual / roastering once they exist. */
 export interface TuneupForecast {
-    date: string;
+    from_date: string;
+    to_date: string;
+    horizon: string;
+    data_id?: number;
+    locked_before_block?: number;
     location_id: number;
     models: Record<string, BlockMap>;
     available_models: string[];
@@ -90,8 +105,7 @@ export interface WeatherMulti {
     locations: Record<string, { current: Record<string, BlockMap>; reference: Record<string, BlockMap> | null }>;
 }
 
-export interface SetLineRequest {
-    date: string;
+export interface SetLineRequest extends TuneupPeriod {
     location_id: number;
     base_model: string;
     rules: RuleIn[];
@@ -99,32 +113,30 @@ export interface SetLineRequest {
     enabled_blocks?: Record<string, boolean> | null;
 }
 
-export interface ManualForecastRequest {
-    date: string;
+export interface ManualForecastRequest extends TuneupPeriod {
     location_id: number;
     blocks: Record<string, number>;
 }
 
-export interface EnsembleRequest {
-    date: string;
+export interface EnsembleRequest extends TuneupPeriod {
     location_id: number;
     ref_dates: Record<string, number>;
     mpe_factor?: number;
     top_n?: number;
 }
 
-export interface ApplyRequest {
-    date: string;
+export interface ApplyRequest extends TuneupPeriod {
     location_id: number;
     base_model: string;
     edit_blocks?: Record<string, number> | null;
     enabled_blocks?: Record<string, boolean> | null;
 }
 
-/** Rules endpoints are keyed by location and date. */
+/** Rules endpoints are keyed by location, the period's first date and the horizon. */
 export interface RuleScope {
     location_id: number;
     date: string;
+    horizon: TuneupHorizon;
 }
 
 export interface TuneupState {

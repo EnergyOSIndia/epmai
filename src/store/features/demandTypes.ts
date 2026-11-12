@@ -133,6 +133,61 @@ export interface DayAheadData {
     manualDayMape: number | null;
 }
 
+/** mean-demand-forecast?data_id&location_id&from_date&to_date — the saved forecast of one period
+ *  (a day, a Mon–Sun week, a calendar month or a calendar year) as one 96-block line per
+ *  forecaster; actual, MAPE, roastering and UDM (period averages) once the period is over. */
+export interface MeanDemandForecastApiResponse {
+    data_id: number;
+    horizon: string;
+    location_id: number;
+    ts_period: string;
+    from_date: string;
+    to_date: string;
+    today: string;
+    /** "running" (no actuals yet) or "completed". */
+    status: string;
+    expected_days?: number;
+    actual_days?: number;
+    udm_days?: number;
+    count: number;
+    forecasts: {
+        forecasted_by: string;
+        client_id: string | null;
+        created_at: string;
+        period_mape?: number;
+        blocks: {
+            block: number;
+            forecast_value: number;
+            actual_value?: number;
+            mape?: number;
+            roastering?: number;
+            udm?: number;
+        }[];
+    }[];
+}
+
+/** One forecaster's line of a period, as 96-block arrays (actual etc. null until completed). */
+export interface MeanForecastLine {
+    forecast: number[];
+    actual: number[] | null;
+    mape: number[] | null;
+    roastering: number[] | null;
+    udm: number[] | null;
+    periodMape: number | null;
+}
+
+/** A period's mean forecast from the API; `system` / `manual` null when the API has none. */
+export interface MeanDemandData {
+    dataId: number;
+    from: string;
+    to: string;
+    /** The API's period name ("2026-11-10", "W26-46", "M26-11", "2026"), "" when nothing is saved. */
+    period: string;
+    status: string;
+    system: MeanForecastLine | null;
+    manual: MeanForecastLine | null;
+}
+
 export interface DemandState {
     data: DemandCalendarData | null;
     loading: boolean;
@@ -169,6 +224,11 @@ export interface DemandState {
     monthAheadLoading: boolean;
     monthAheadError: string | null;
     monthAheadRequestId: string | null;
+    // Planning horizon Day / Week / Month / Year ahead: one period's mean forecast (mean-demand-forecast).
+    mean: MeanDemandData | null;
+    meanLoading: boolean;
+    meanError: string | null;
+    meanRequestId: string | null;
     // Long term (data_id=102150): daily 96-block forecast + the seasons of each year it spans.
     longTermData: DemandCalendarData | null;
     longTermLoading: boolean;

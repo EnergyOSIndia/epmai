@@ -11,7 +11,12 @@ export function CellTabStrip() {
   const { tab, setTab } = useCellTab();
   if (!isMod(moduleId)) return null;
 
-  const items = [{ id: "overview", n: "Overview" }, ...SUBS[moduleId].map((s) => ({ id: s.id, n: s.n }))];
+  // Supply Availability also gets "Supply Bifurcation" (second): its Graph Type day / week / month
+  // grids and year calendar, as All modules shows them.
+  // Market Intelligence gets "Market Detail" (second): the Planning-horizon Market Detail page.
+  const extra = moduleId === "supply" ? [{ id: "bifurcation", n: "Supply Bifurcation" }]
+    : moduleId === "mi" ? [{ id: "marketdetail", n: "Market Detail" }] : [];
+  const items = [{ id: "overview", n: "Overview" }, ...extra, ...SUBS[moduleId].map((s) => ({ id: s.id, n: s.n }))];
   const active = items.some((i) => i.id === tab) ? tab : "overview";
 
   return (

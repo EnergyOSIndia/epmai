@@ -42,7 +42,7 @@ export function ExchangeChart({ exchange, data, pointWidth, currentBlock, height
     const cfg = Object.fromEntries(SERIES.map((s) => [s.name, s]));
     const o: ChartOptions = {
       chart: {
-        animation: false, height, spacing: [10, 8, 6, 4], backgroundColor: "#ffffff",
+        animation: false, height, spacing: [10, 8, 6, 4], backgroundColor: "transparent",
         style: { fontFamily: "inherit", cursor: clickable ? "pointer" : "default" },
         // The tooltip is drawn outside the chart; hide it as soon as the mouse leaves.
         events: {
@@ -72,13 +72,13 @@ export function ExchangeChart({ exchange, data, pointWidth, currentBlock, height
       xAxis: {
         min: 0.5, max: BLOCKS + 0.5, tickPositions: TICKS, startOnTick: false, endOnTick: false,
         // Every tick labelled (no auto step / rotation, which could leave just "1 5 9" after a resize).
-        labels: { style: AXIS, step: 1, autoRotation: [] }, lineColor: "#e5e7eb", tickLength: 0,
-        plotBands: currentBlock ? [{ from: currentBlock - 0.5, to: currentBlock + 0.5, color: "rgba(191,219,254,0.6)", zIndex: 0 }] : [],
+        labels: { style: AXIS, step: 1, autoRotation: [] }, lineColor: "hsl(var(--border))", tickLength: 0,
+        plotBands: currentBlock ? [{ from: currentBlock - 0.5, to: currentBlock + 0.5, color: "hsl(var(--accent) / 0.7)", zIndex: 0 }] : [],
       },
       yAxis: [
         {
           title: { text: undefined }, labels: { style: AXIS }, lineWidth: 0, min: 0,
-          gridLineDashStyle: "Dash", gridLineColor: "#eef0f4",
+          gridLineDashStyle: "Dash", gridLineColor: "hsl(var(--border))",
           ...(hasMW ? {} : { max: 4, tickPositions: [0, 2, 4] }),
         },
         {
@@ -91,13 +91,13 @@ export function ExchangeChart({ exchange, data, pointWidth, currentBlock, height
         // Highcharts' own symbols: square-ified rectangles with a full radius give Buy / Sell
         // circles; the lines get a short line (MCV dashed). Click hides / shows a series.
         symbolWidth: 14, symbolHeight: 8, symbolRadius: 4, squareSymbol: true,
-        itemStyle: { fontSize: "9px", fontWeight: "600", color: "#374151" },
-        itemHoverStyle: { color: "#111827" },
-        itemHiddenStyle: { color: "#cbd5e1" },
+        itemStyle: { fontSize: "9px", fontWeight: "600", color: "hsl(var(--foreground))" },
+        itemHoverStyle: { color: "hsl(var(--foreground))" },
+        itemHiddenStyle: { color: "hsl(var(--muted-foreground) / 0.5)" },
       },
       tooltip: {
         shared: true, useHTML: true, outside: tooltipOutside, hideDelay: 0, animation: false,
-        backgroundColor: "#ffffff", borderColor: "#e5e7eb", borderRadius: 8, padding: 8,
+        backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: 8, padding: 8,
         shadow: { color: "rgba(15,23,42,0.12)", offsetX: 0, offsetY: 2, width: 6 },
         formatter(this: any) { return chartTooltipHtml(this); },
         // Keep the outside tooltip inside the window so it can't add a page scrollbar.

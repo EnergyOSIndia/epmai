@@ -1,25 +1,21 @@
 /* Load-profile / box-plot grid — ported from the EPM Demand views.
    Palette + layout scoped under .lg-root so it can't leak into the rest of the
-   app. Colours ride the app theme tokens, so it follows light / dark. */
+   app. Colours ride the app theme tokens, so it follows the palette and light / dark. */
 .lg-root {
-  /* Fixed LIGHT skin — the chart grid is always on white/paper surfaces with
-     dark text, regardless of the app's light/dark mode, so the charts read as
-     light. Only the data colours (--lg-accent) follow the selected theme. */
-  --lg-panel: #ffffff;
-  --lg-panel-2: #eef2f6;
-  --lg-bg-2: #f6f8fa;
-  --lg-border: #e2e8f0;
-  --lg-border-strong: #cbd5e1;
-  --lg-text: #334155;
-  --lg-muted: #64748b;
+  /* Follows the app theme (palette + light / dark), like the rest of the app. */
+  --lg-panel: hsl(var(--card));
+  --lg-panel-2: hsl(var(--muted));
+  --lg-bg-2: hsl(var(--background));
+  --lg-border: hsl(var(--border));
+  --lg-border-strong: hsl(var(--muted-foreground) / 0.45);
+  --lg-text: hsl(var(--foreground));
+  --lg-muted: hsl(var(--muted-foreground));
   --lg-accent: hsl(var(--primary));
-  --lg-accent-ink: #ffffff;
+  --lg-accent-ink: hsl(var(--primary-foreground));
   --lg-font-display: inherit;
   --lg-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
 
-  /* Highcharts 13 colours its canvas with CSS light-dark(); pinning the chart
-     grid to the light scheme keeps the charts light even in the app's dark mode. */
-  color-scheme: light;
+  /* Highcharts 13 colours its canvas with CSS light-dark(): it follows the app's color-scheme. */
 
   display: flex;
   flex-direction: column;
@@ -28,10 +24,8 @@
 
 .lg-note { color: var(--lg-muted); font-size: 13px; padding: 24px 4px; }
 
-/* Highcharts' own stylesheet pins each chart to `color-scheme: light dark`,
-   which makes its light-dark() palette follow the app's dark mode. Override it
-   (higher specificity) so every chart in the grid renders its LIGHT palette. */
-.lg-root .highcharts-container { color-scheme: light; }
+/* Highcharts' own stylesheet sets each chart to `color-scheme: light dark`, so its light-dark()
+   palette follows the app's light / dark mode like the rest of the grid. */
 
 /* ---------------- View head + controls ---------------- */
 .lg-view { display: flex; flex-direction: column; min-height: 0; }

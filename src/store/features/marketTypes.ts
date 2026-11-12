@@ -53,4 +53,10 @@ export interface MarketState {
     rangeLoading: boolean;
     rangeError: string | null;
     rangeRequestId: string | null;
+    // Planning horizon Week / Month / Year ahead: the period's days averaged block by block into one
+    // "average day" (every market and exchange), cached in IndexedDB.
+    period: { from: string; to: string; days: number; detail: MarketDetailData } | null;
+    periodLoading: boolean;
+    periodError: string | null;
+    periodRequestId: string | null;
 }

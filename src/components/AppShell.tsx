@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
-import { BookOpen, FileText, Globe } from "lucide-react";
+import { BookOpen, FileText, Globe, Home } from "lucide-react";
 import { Toaster } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -9,6 +9,7 @@ import { keepH } from "@/lib/horizon";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/ThemeProvider";
 import { CellTabStrip } from "./CellTabStrip";
+import { DetailsNav } from "./DetailsNav";
 import { Clock } from "./Clock";
 import { HorizonNav } from "./HorizonNav";
 import { HorizonStrip } from "./HorizonStrip";
@@ -52,6 +53,8 @@ export function AppShell() {
   // Demand's "Forecast accuracy" cell page gets the same full-bleed dummy-dashboard
   // treatment — same page at every horizon.
   const isCellForecastAcc = isCell && cellMod === "demand" && cellTab === "acc";
+  // Supply's "Supply Bifurcation" cell view (the grids / calendar) uses the full window too.
+  const isCellSupplyBifurcation = isCell && ((cellMod === "supply" && cellTab === "bifurcation") || (cellMod === "mi" && cellTab === "marketdetail"));
   // The Planning-horizon page at Month ahead is the UP DC demand calendar, which wants the full window.
   // All modules → a module's horizon page (/modules/X?m=) shows the same view as the Planning
   // horizon, so it follows the same width rules, read from its own module and horizon.
@@ -75,7 +78,7 @@ export function AppShell() {
   // analytics view, so it claims the full window too.
   const isHorizonLongTerm = (pathname === "/horizon" || isModulePage) && planTf === "lt";
   // Pages that lay out every module or every horizon use the full window; focused pages stay capped.
-  const fullWidth = isCommand || isModulesIndex || pathname === "/snapshot" || pathname.endsWith("/row") || isHorizonCalendar || isHorizonLongTerm || isCellTuneup || isCellForecastAcc;
+  const fullWidth = isCommand || isModulesIndex || pathname === "/snapshot" || pathname.endsWith("/row") || isHorizonCalendar || isHorizonLongTerm || isCellTuneup || isCellForecastAcc || isCellSupplyBifurcation;
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -83,16 +86,24 @@ export function AppShell() {
         <div className="min-h-full">
           <header className="sticky z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85" style={{ top: "env(safe-area-inset-top, 0px)" }}>
             <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 pb-2 pt-2.5 lg:px-8">
-              <Link to="/" search={keepH} className="shrink-0 leading-none">
+              {/* Same size as with the old tagline line, so the header layout doesn't shift. */}
+              <Link to="/" search={keepH} className="shrink-0 leading-none sm:min-h-[38px] sm:min-w-[131px]">
                 <span className="condensed block text-lg font-bold tracking-tight">EPM AI</span>
-                <span className="hidden text-[10px] text-muted-foreground sm:block">Energy portfolio management</span>
               </Link>
 
               <nav className="flex flex-wrap items-center gap-1.5" aria-label="Main">
-                <Link to="/" search={keepH} className={navCls} activeProps={navActive} activeOptions={{ exact: true, includeSearch: false }}>Command centre</Link>
-                <Link to="/overview" search={keepH} className={navCls} activeProps={navActive} activeOptions={{ includeSearch: false }}>Overview</Link>
+                {/* Command centre (home) as an icon; the EPM AI logo also goes here. */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link to="/" search={keepH} aria-label="Home" className={cn(navCls, "grid place-items-center px-2")} activeProps={navActive} activeOptions={{ exact: true, includeSearch: false }}>
+                      <Home className="h-4 w-4" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Home</TooltipContent>
+                </Tooltip>
                 <HorizonNav />
                 <ModuleNav />
+                <DetailsNav />
               </nav>
 
               <span className="flex-1" />
@@ -136,7 +147,9 @@ export function AppShell() {
             )}
           </header>
 
-          <main className={cn("mx-auto px-4 pb-20 pt-6 lg:px-8", fullWidth ? "max-w-none" : "max-w-[1400px]")}>
+          {/* The Command centre fits the window (its grid grows to the bottom edge), so it drops the tall
+              bottom padding the other pages keep. */}
+          <main className={cn("mx-auto px-4 pt-6 lg:px-8", isCommand ? "pb-3" : "pb-20", fullWidth ? "max-w-none" : "max-w-[1400px]")}>
             <Outlet />
           </main>
         </div>

@@ -16,13 +16,14 @@ import { KpiCard } from "@/components/dayahead/KpiCard";
 import { PeriodBreakdown } from "@/components/dayahead/PeriodBreakdown";
 import { WeatherCard } from "@/components/dayahead/WeatherCard";
 import { cv } from "@/components/chart/colors";
+import { DemandPeriodForecast } from "@/components/dayahead/DemandPeriodForecast";
 
 const n2 = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const card = "min-h-0 rounded-xl border bg-card p-3";
 
 /** The Forecast page for one date. Day ahead uses the defaults; Week / Month ahead pass their
  *  day_ahead `dataId` (102120 / 102130), their last date and the chart title. */
-export function DemandDayAhead({ dataId = 102110, maxDate: lastDate, title }: { dataId?: number; maxDate?: string; title?: string } = {}) {
+function DemandDayAheadForecast({ dataId = 102110, maxDate: lastDate, title }: { dataId?: number; maxDate?: string; title?: string } = {}) {
   const [date, setDate] = useState(todayIso);
   const [location, setLocation] = useState("BH_AL");
   // Up to a week ahead of today (unless the horizon gives its own last date), any day back.
@@ -145,5 +146,9 @@ function Skeleton({ dateCtl }: { dateCtl: ReactNode }) {
   );
 }
 
-/** All modules → Demand shows the same view as the Planning horizon. */
-export const DemandDayAheadModule = () => <DemandDayAhead />;
+/** Demand · Day ahead — Planning horizon: the Forecast page from the mean-demand-forecast API
+ *  (data_id 102110) — see components/dayahead/DemandPeriodForecast.tsx. */
+export const DemandDayAhead = () => <DemandPeriodForecast kind="day" />;
+
+/** All modules → Demand (and Command centre → Demand Forecast) keep the day_ahead Forecast page. */
+export const DemandDayAheadModule = () => <DemandDayAheadForecast />;

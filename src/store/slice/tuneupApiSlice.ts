@@ -10,6 +10,8 @@ import type {
     SetLineRequest,
     SimilarDay,
     SimilarDaysApiResponse,
+    TuneupHorizon,
+    TuneupPeriod,
     TuneupConfig,
     TuneupForecast,
     TuneupState,
@@ -43,8 +45,23 @@ export const tuneupToday = () => new Date().toISOString().split("T")[0];
 export const DEFAULT_TUNEUP_LOCATION = 10030;
 
 // Keys of the remembered answers in the state.
-export const forecastKey = (date: string, location_id: number) => `${date}:${location_id}`;
-export const rulesKey = ({ location_id, date }: RuleScope) => `${location_id}:${date}`;
+export const forecastKey = ({ from_date, to_date, horizon }: TuneupPeriod, location_id: number) => `${horizon}:${from_date}:${to_date}:${location_id}`;
+export const rulesKey = ({ location_id, date, horizon }: RuleScope) => `${horizon}:${location_id}:${date}`;
+
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** The period a date falls in for a horizon: the day, its Mon–Sun week, or its calendar month. */
+export function tuneupPeriod(date: string, horizon: TuneupHorizon): TuneupPeriod {
+    const d = new Date(date + "T00:00:00");
+    if (horizon === "week_ahead") {
+        const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        return { from_date: iso(mon), to_date: iso(sun), horizon };
+    }
+    if (horizon === "month_ahead") {
+        return { from_date: iso(new Date(d.getFullYear(), d.getMonth(), 1)), to_date: iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)), horizon };
+    }
+    return { from_date: date, to_date: date, horizon };
+}
 export const similarKey = (date: string, location_id: number, weather_location_id: string) => `${date}:${location_id}:${weather_location_id}`;
 export const weatherKey = (date: string, location_id: number, weather_location_id?: string, ref_date?: string) =>
     `${date}:${location_id}:${weather_location_id ?? ""}:${ref_date ?? ""}`;
@@ -71,12 +88,18 @@ function once<R>(key: string, load: () => Promise<R>): Promise<R> {
     return p;
 }
 
+// The browser reports a server crash (an error reply without CORS headers) or no connection as a bare
+// "Failed to fetch"; name the step that failed instead.
+const noReply = (what: string) => (e: unknown): never => {
+    if (e instanceof TypeError) throw new Error(`${what} failed: the server did not answer (server error or no connection)`);
+    throw e;
+};
 const get = <R>(path: string, what: string) =>
-    fetch(`${T}/${path}`, { headers: { accept: "application/json" } }).then((r) => json<R>(r, what));
+    fetch(`${T}/${path}`, { headers: { accept: "application/json" } }).catch(noReply(what)).then((r) => json<R>(r, what));
 const send = <R>(method: "POST" | "PUT" | "DELETE", path: string, what: string, body?: unknown) =>
     fetch(`${T}/${path}`, { method, headers: body === undefined ? { accept: "application/json" } : JSON_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) })
-        .then((r) => json<R>(r, what));
-const ruleQS = ({ location_id, date }: RuleScope) => `location_id=${location_id}&date=${encodeURIComponent(date)}`;
+        .catch(noReply(what)).then((r) => json<R>(r, what));
+const ruleQS = ({ location_id, date, horizon }: RuleScope) => `location_id=${location_id}&date=${encodeURIComponent(date)}&horizon=${horizon}`;
 
 // ── Reads ─────────────────────────────────────────────────────────────
 
@@ -96,11 +119,12 @@ export const fetchSavedTuneupConfig = createAsyncThunk<TuneupConfig | null, void
     async () => { try { return (await idbGet<TuneupConfig>(CONFIG_IDB)) ?? null; } catch { return null; } },
 );
 
-// 2. Forecast: every model's 96 blocks for a date (System, Manual …).
-export const fetchTuneupForecast = createAsyncThunk<TuneupForecast, { date: string; location_id: number }>(
+// 2. Forecast: every model's 96 blocks (System, Manual …) for a period — a day, a Mon–Sun week or a
+// calendar month (`horizon`), plus actual / roastering once they exist.
+export const fetchTuneupForecast = createAsyncThunk<TuneupForecast, TuneupPeriod & { location_id: number }>(
     "tuneup/fetchTuneupForecast",
-    ({ date, location_id }) => once(`forecast:${forecastKey(date, location_id)}`, () =>
-        get<TuneupForecast>(`forecast?date=${encodeURIComponent(date)}&location_id=${location_id}`, "Load forecast")),
+    ({ location_id, ...period }) => once(`forecast:${forecastKey(period, location_id)}`, () =>
+        get<TuneupForecast>(`forecast?${new URLSearchParams({ from_date: period.from_date, to_date: period.to_date, location_id: String(location_id), horizon: period.horizon }).toString()}`, "Load forecast")),
 );
 
 // 3. Similar days to a date, matched on a weather location's weather.
@@ -149,7 +173,7 @@ export const postManualForecast = createAsyncThunk<unknown, ManualForecastReques
 );
 
 // 8. Reset the Manual Forecast back to System (saved).
-export const postReset = createAsyncThunk<unknown, { date: string; location_id: number }>(
+export const postReset = createAsyncThunk<unknown, TuneupPeriod & { location_id: number }>(
     "tuneup/postReset",
     (payload) => send<unknown>("POST", "reset", "Reset forecast", payload),
 );
@@ -222,7 +246,8 @@ export const tuneupSlice = createSlice({
         // Reads: remember the latest answer per request.
         builder
             .addCase(fetchTuneupForecast.fulfilled, (state, action) => {
-                state.forecasts[forecastKey(action.meta.arg.date, action.meta.arg.location_id)] = action.payload;
+                const { location_id, ...period } = action.meta.arg;
+                state.forecasts[forecastKey(period, location_id)] = action.payload;
             })
             .addCase(fetchSimilarDays.fulfilled, (state, action) => {
                 const a = action.meta.arg;
@@ -239,8 +264,8 @@ export const tuneupSlice = createSlice({
         // Rule writes return the new list — keep it as the remembered one for that date.
         for (const thunk of ruleWrites) {
             builder.addCase(thunk.fulfilled, (state, action) => {
-                const { location_id, date } = action.meta.arg as RuleScope;
-                state.rules[rulesKey({ location_id, date })] = action.payload;
+                const { location_id, date, horizon } = action.meta.arg as RuleScope;
+                state.rules[rulesKey({ location_id, date, horizon })] = action.payload;
             });
         }
     },
