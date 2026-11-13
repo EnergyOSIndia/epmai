@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight, Download, GitCompare, SquareArrowOutUpRight } from "lucide-react";
 import { toast } from "sonner";
@@ -6,6 +6,17 @@ import { MODS, TFS, modName, type ModId, type Status, type TfId } from "@/data/e
 import { G } from "@/data/model";
 import { SUBS, type SubVal } from "@/data/insights";
 import { Spark } from "@/components/chart/Spark";
+import { DemandPlanSpark, hasDemandPlanSpark } from "@/components/DemandPlanSpark";
+import { SupplyPlanSpark, hasSupplyPlanSpark } from "@/components/SupplyPlanSpark";
+
+// A chart-only cell (Demand / Supply Day / Week / Month) fills the height of a regular cell's
+// number row + mini chart + text line: the mini chart's height plus this.
+const PLAN_EXTRA_H = 47;
+// The grid fills the window: each module row's mini charts grow from MIN_CHART_H to take the free
+// height (no page scroll), up to MAX_CHART_H.
+const MIN_CHART_H = 20, MAX_CHART_H = 160;
+// Module rows whose cells have charts (Reports' cells are text only, so they don't grow).
+const CHART_ROWS = MODS.filter((m) => TFS.some((t) => G(m.id, t.id).chart)).length;
 import { VizView } from "@/components/blocks";
 import { Section } from "@/components/layout";
 import { Dot, Pill } from "@/components/status";
@@ -30,11 +41,30 @@ type Filter = Status | "all";
 type View = "charts" | "values";
 
 export function CommandCentrePage() {
+  // The last Planning-horizon pick: only the "Row" / detail links open at it. No column is highlighted
+  // — nothing on this page selects a horizon.
   const { tf } = useHorizon();
   const [expanded, setExpanded] = useState<Set<ModId>>(new Set());
   const [view, setView] = useState<Record<ModId, View>>({} as Record<ModId, View>);
   // setFilter is unused while the filter-pills UI is hidden (see below) — filter stays "all".
   const [filter] = useState<Filter>("all");
+
+  // Mini-chart height that makes the grid end at the window's bottom edge: measured after layout,
+  // the free height (or overflow) is shared between the chart rows. Re-fit on resize and when a
+  // module's details open / close (open details may still need a scroll).
+  const [chartH, setChartH] = useState(MIN_CHART_H);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = document.getElementById("cc-grid");
+      if (!el) return;
+      const bottom = el.getBoundingClientRect().bottom + window.scrollY;
+      const room = window.innerHeight - 12 - bottom; // 12 = the page's bottom padding here
+      setChartH((h) => Math.max(MIN_CHART_H, Math.min(MAX_CHART_H, h + Math.floor(room / CHART_ROWS))));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [expanded, chartH]);
 
   const isOpen = (m: ModId) => expanded.has(m);
   const viewOf = (m: ModId): View => view[m] ?? "charts";
@@ -94,7 +124,7 @@ export function CommandCentrePage() {
       </div>
       */}
 
-      <Section>
+      <Section id="cc-grid">
         {/* title/desc + status-filter pills hidden so the module boxes get the extra space —
             kept here (commented out) in case it's wanted back later.
         <>
@@ -126,7 +156,7 @@ export function CommandCentrePage() {
                   </div>
                 </th>
                 {TFS.map((t) => (
-                  <th key={t.id} className={cn("px-1 pb-0.5 align-bottom", t.id === tf && "rounded-t-md bg-accent")}>
+                  <th key={t.id} className="px-1 pb-0.5 align-bottom">
                     <Link to="/horizon" search={(prev: Record<string, unknown>) => ({ ...prev, h: t.id, mod: "overview" })} title={"Open planning horizon · " + t.name}
                       className="group block w-full rounded px-1.5 py-0.5 text-left hover:bg-accent">
                       <span className="flex items-center gap-1 text-[13px] font-semibold">
@@ -145,7 +175,7 @@ export function CommandCentrePage() {
                 const subs = SUBS[m.id];
                 return (
                   <ModuleRows key={m.id} mod={m.id} name={m.name} sub={m.sub} subN={subs.length}
-                    open={open} view={viewOf(m.id)} tf={tf} dim={dim} onToggle={() => toggle(m.id)}
+                    open={open} view={viewOf(m.id)} tf={tf} dim={dim} chartH={chartH} onToggle={() => toggle(m.id)}
                     onView={(v) => setView((p) => ({ ...p, [m.id]: v }))} />
                 );
               })}
@@ -165,8 +195,8 @@ export function CommandCentrePage() {
 }
 
 /* ---------- one module: summary row + (when open) a detail-options bar and its detail rows ---------- */
-function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, onToggle, onView }: {
-  mod: ModId; name: string; sub: string; subN: number; open: boolean; view: View; tf: TfId;
+function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, chartH, onToggle, onView }: {
+  mod: ModId; name: string; sub: string; subN: number; open: boolean; view: View; tf: TfId; chartH: number;
   dim: (st: Status) => boolean; onToggle: () => void; onView: (v: View) => void;
 }) {
   const subs = SUBS[mod];
@@ -199,11 +229,23 @@ function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, onToggle, onVie
 
         {TFS.map((t) => {
           const g = G(mod, t.id), s = g.sum, faded = dim(s.st);
+          const planChart = (mod === "demand" && hasDemandPlanSpark(t.id)) || (mod === "supply" && hasSupplyPlanSpark(t.id));
           return (
-            <td key={t.id} className={cn("border-t border-border/70 p-1 align-top", t.id === tf && "bg-accent/40", faded && "opacity-25")}>
+            <td key={t.id} className={cn("border-t border-border/70 p-1 align-top", faded && "opacity-25")}>
               <Link to="/cell/$moduleId" params={{ moduleId: mod }} search={{ m: t.id }}
                 title={"Open " + modName(mod, t.id) + " · " + t.name}
                 className={cn("group/cell relative block h-full w-full rounded-lg border p-1.5 text-left shadow-sm transition-colors", CELL_CARD[s.st])}>
+                {planChart ? (
+                  // Demand / Supply Day / Week / Month ahead: just the Planning horizon's chart, filling
+                  // the box (same height as the other cells' number + chart + text).
+                  <>
+                    <span className="block" style={{ height: chartH + PLAN_EXTRA_H }}>
+                      {mod === "demand" ? <DemandPlanSpark tf={t.id} fallback={g.chart} height={chartH + PLAN_EXTRA_H} />
+                        : <SupplyPlanSpark tf={t.id} fallback={g.chart} height={chartH + PLAN_EXTRA_H} />}
+                    </span>
+                    <SquareArrowOutUpRight className="absolute right-1.5 top-1.5 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/cell:opacity-100" />
+                  </>
+                ) : (<>
                 <span className="flex items-center gap-1.5">
                   <Dot st={s.st} />
                   <span className="num truncate text-[14px] font-semibold">{s.big}</span>
@@ -211,13 +253,14 @@ function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, onToggle, onVie
                 </span>
                 {g.chart ? (
                   <>
-                    <span className="mt-1 block h-[20px]"><Spark spec={g.chart} height={20} /></span>
+                    <span className="mt-1 block" style={{ height: chartH }}><Spark spec={g.chart} height={chartH} /></span>
                     <span className="mt-1 block truncate text-[12px] text-muted-foreground">{s.sub}</span>
                     <SquareArrowOutUpRight className="absolute right-1.5 top-1.5 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/cell:opacity-100" />
                   </>
                 ) : (
                   <span className="mt-1 block h-[20px] text-[12px] leading-snug text-muted-foreground">{s.sub}</span>
                 )}
+                </>)}
               </Link>
             </td>
           );
@@ -271,7 +314,7 @@ function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, onToggle, onVie
                 </div>
               </th>
               {TFS.map((t) => (
-                <td key={t.id} className={cn("bg-muted/20 p-1 align-top", t.id === tf && "bg-accent/30")}>
+                <td key={t.id} className="bg-muted/20 p-1 align-top">
                   <DetailCell v={S.f(t.id)} view={view} />
                 </td>
               ))}

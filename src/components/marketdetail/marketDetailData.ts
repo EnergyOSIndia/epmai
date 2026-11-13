@@ -14,7 +14,7 @@ export const MIN_ROW_H = 200;
 export const SERIES = [
   { key: "buyMW", name: "Buy", color: "#10b981" },
   { key: "sellMW", name: "Sell", color: "#ef4444" },
-  { key: "mcpPrice", name: "MCP", color: "#111827" },
+  { key: "mcpPrice", name: "MCP", color: "var(--ch-ink)" },
   { key: "acpPrice", name: "ACP", color: "#f43f5e" },
   { key: "acvMW", name: "ACV", color: "#2563eb" },
   { key: "mcvMW", name: "MCV", color: "#8b5cf6" },

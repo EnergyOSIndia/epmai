@@ -114,9 +114,8 @@ function DemandWeekAheadGrid() {
   );
 }
 
-/** Demand · Week ahead — Planning horizon: the Forecast page for the whole week on one screen
- *  (every day's 96-block average in one chart, the average 96-block profile, error analysis and
- *  period breakdown) — see components/dayahead/DemandPeriodForecast.tsx. */
+/** Demand · Week ahead — Planning horizon: the Forecast page from the mean-demand-forecast
+ *  API (one Mon–Sun week) — see components/dayahead/DemandPeriodForecast.tsx. */
 export function DemandWeekAhead() {
   return <DemandPeriodForecast kind="week" />;
 }

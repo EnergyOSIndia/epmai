@@ -28,9 +28,9 @@ export function MarketTable({ market, exchanges, data, block }: { market: Market
   };
   return (
     <div className={CARD + " flex shrink-0 flex-col px-2.5 py-2"} style={{ width: panelWidth(exchanges.length) }}>
-      <div className="mb-1 text-center text-[11px] font-bold tracking-[0.15em] text-slate-600">{market}</div>
+      <div className="mb-1 text-center text-[11px] font-bold tracking-[0.15em] text-muted-foreground">{market}</div>
       {/* The table fills the card; its rows share the height, so it scales with the row. */}
-      <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-[#eef0f4]">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border">
         {/* Fixed layout: the label column keeps its width and the value columns share the rest
             equally, however many exchanges are on. */}
         <table className="h-full w-full table-fixed border-collapse text-[10px]">
@@ -39,18 +39,18 @@ export function MarketTable({ market, exchanges, data, block }: { market: Market
             {[...exchanges, "Total"].map((c) => <col key={c} />)}
           </colgroup>
           <thead>
-            <tr className="border-b border-[#eef0f4] bg-slate-50 text-slate-500">
+            <tr className="border-b border-border bg-muted/50 text-muted-foreground">
               <th className="px-2 py-1" />
               {exchanges.map((e) => <th key={e} className="px-2 py-1.5 text-right font-semibold">{e}</th>)}
-              <th className="px-2 py-1.5 text-right font-bold text-slate-800">Total</th>
+              <th className="px-2 py-1.5 text-right font-bold text-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
             {ROWS.map((r) => (
-              <tr key={r.key} className="border-b border-[#eef0f4] last:border-0 hover:bg-[#eff6ff]">
-                <td className="truncate whitespace-nowrap px-2 font-medium text-slate-600">{r.label}</td>
-                {exchanges.map((e) => <td key={e} className="px-2 text-right tabular-nums text-slate-800">{fmt(at(e)(r.key))}</td>)}
-                <td className="px-2 text-right font-bold tabular-nums text-slate-900">{fmt(total(r.key, r.price))}</td>
+              <tr key={r.key} className="border-b border-border last:border-0 hover:bg-accent">
+                <td className="truncate whitespace-nowrap px-2 font-medium text-muted-foreground">{r.label}</td>
+                {exchanges.map((e) => <td key={e} className="px-2 text-right tabular-nums text-foreground">{fmt(at(e)(r.key))}</td>)}
+                <td className="px-2 text-right font-bold tabular-nums text-foreground">{fmt(total(r.key, r.price))}</td>
               </tr>
             ))}
           </tbody>

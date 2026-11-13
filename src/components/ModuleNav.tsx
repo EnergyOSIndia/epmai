@@ -7,10 +7,10 @@ import {
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
 
-/** Header "All modules" entry rendered as a shadcn Navigation Menu: a trigger that opens a
+/** Header "Modules" entry rendered as a shadcn Navigation Menu: a trigger that opens a
  *  panel of every module. Picking a module lands on that module's Overview — its complete
  *  "every horizon" view — by default. Independent of the "Planning horizon" menu. While a
- *  module's pages are open the trigger shows that module's name instead of "All modules". */
+ *  module's pages are open the trigger shows that module's name instead of "Modules". */
 export function ModuleNav() {
   const { pathname } = useLocation();
   const seg = pathname.startsWith("/modules/") ? pathname.split("/")[2] : undefined;
@@ -25,7 +25,7 @@ export function ModuleNav() {
               activeMod && "bg-accent text-foreground")}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
-            <span className="max-w-[10rem] truncate">{activeMod ? modName(activeMod) : "All modules"}</span>
+            <span className="max-w-[10rem] truncate">{activeMod ? modName(activeMod) : "Modules"}</span>
           </NavigationMenuTrigger>
           <NavigationMenuContent>
             <div className="w-[min(90vw,34rem)] p-3">

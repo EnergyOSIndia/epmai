@@ -9,13 +9,14 @@ import { MarketChartModal, type ModalChart } from "@/components/marketdetail/Mar
 import { ToggleGroup } from "@/components/marketdetail/ExchangeToggles";
 import { EXCHANGES, MARKETS, getCurrentBlock, type Exchange, type Market } from "@/components/marketdetail/marketDetailData";
 import { useMarketRange } from "@/components/marketdetail/useMarketRange";
+import { MarketDetailPage } from "@/components/marketdetail/MarketDetailPage";
 
 /** Market Intelligence · Month ahead — Planning-horizon view. Same Mon–Sun calendar as Supply /
  *  Demand's month ahead: one box per date (day number, peak MCP, cleared energy) with a tiny
  *  market chart for the chosen market and exchange (DAM · IEX by default) from /market-graph,
  *  cached in IndexedDB (Sync DB re-checks the API). Click a day to open it full size. Opens on
  *  the current month; goes forward up to next month and back freely (?month=2026-10). */
-export function MarketIntelligenceMonthAhead() {
+function MarketIntelligenceMonthAheadPage() {
   const search = useSearch({ strict: false }) as { month?: string };
   const navigate = useNavigate();
   const [market, setMarket] = useState<Market>("DAM");
@@ -138,5 +139,8 @@ export function MarketIntelligenceMonthAhead() {
   );
 }
 
-/** All modules shows the same view as the Planning horizon. */
-export const MarketIntelligenceMonthAheadModule = MarketIntelligenceMonthAhead;
+/** Planning horizon: the Day-ahead Market Detail page for the month's average day. */
+export const MarketIntelligenceMonthAhead = () => <MarketDetailPage kind="month" />;
+
+/** All modules (and Command centre's own views) keep the month-ahead page as it was. */
+export const MarketIntelligenceMonthAheadModule = MarketIntelligenceMonthAheadPage;

@@ -1,4 +1,4 @@
-import { createHashHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { createBrowserHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { isMod, isTf, type ModId, type TfId } from "@/data/engine";
 import { AppShell } from "@/components/AppShell";
 import { OverviewPage } from "@/pages/Overview/OverviewPage";
@@ -12,6 +12,7 @@ import { PlanningHorizonPage } from "@/pages/PlanningHorizon/PlanningHorizonPage
 import { ReportsPage } from "@/pages/Reports/ReportsPage";
 import { GlossaryPage } from "@/pages/Glossary/GlossaryPage";
 import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
+import { prettyUrls, upgradeHashUrl } from "@/lib/prettyUrls";
 
 const rootRoute = createRootRoute({
   // h = planning horizon, m = module horizon (single-module pages), mod = module focused on the
@@ -44,9 +45,13 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/glossary", component: GlossaryPage }),
 ]);
 
-// Hash history keeps deep links working when the app is served as a single static file.
-// Switch to createBrowserHistory() if you deploy behind a server with SPA fallback.
-export const router = createRouter({ routeTree, history: createHashHistory(), scrollRestoration: true, defaultPreload: "intent" });
+// Browser history with readable URLs (/planning/week-ahead/supply-availability …): `prettyUrls`
+// translates them to the routes above and back. The server must answer every path with
+// index.html (SPA fallback) — see README "Deployment". Old /#/… links are moved into the path.
+upgradeHashUrl();
+export const router = createRouter({
+  routeTree, history: createBrowserHistory(), rewrite: prettyUrls, scrollRestoration: true, defaultPreload: "intent",
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

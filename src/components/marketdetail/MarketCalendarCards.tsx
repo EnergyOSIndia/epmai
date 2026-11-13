@@ -39,7 +39,7 @@ export function MarketWeekCard({ title, exchange, data, isToday, currentBlock, i
           {title}
           {isToday && <span className="rounded bg-teal-500 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-white">Today</span>}
         </span>
-        <span className="font-mono text-[10px] text-slate-500">{!isLoading && stats ? `Pk ${rs(stats.peakMcp)}` : ""}</span>
+        <span className="font-mono text-[10px] text-muted-foreground">{!isLoading && stats ? `Pk ${rs(stats.peakMcp)}` : ""}</span>
         <span className="justify-self-end">
           {!isLoading && stats && (
             <span className="rounded-full bg-emerald-100 px-1.5 py-px font-mono text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
@@ -48,7 +48,7 @@ export function MarketWeekCard({ title, exchange, data, isToday, currentBlock, i
           )}
         </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-white" style={{ height: chartH }}>
+      <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-card" style={{ height: chartH }}>
         {isLoading || !data ? (
           <div className="h-full w-full animate-pulse rounded-md bg-muted" />
         ) : (
@@ -80,14 +80,14 @@ export function MarketMonthBox({ dayNum, exchange, data, isToday, currentBlock, 
       role="button" tabIndex={0} aria-label={`Open day ${dayNum}`}
       onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpen(); }}
       className="dc-cell"
-      style={isToday ? { borderColor: "#14b8a6", boxShadow: "0 0 0 1px #14b8a6" } : undefined}
+      style={isToday ? { borderColor: "hsl(var(--primary))", boxShadow: "0 0 0 1px hsl(var(--primary))" } : undefined}
     >
       <div className="top">
         <span className="dn" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{dayNum}{isToday && <span className="rounded bg-teal-500 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-white">Today</span>}</span>
         {stats && !isLoading && <span className="pk">Pk {rs(stats.peakMcp)}</span>}
         {stats && !isLoading && <span className="dc-chip nt">{Math.round(stats.mu).toLocaleString("en-IN")} MU</span>}
       </div>
-      <div className="overflow-hidden rounded bg-white" style={{ height: h }}>
+      <div className="overflow-hidden rounded bg-card" style={{ height: h }}>
         {isLoading || !data ? (
           <div className="h-full w-full animate-pulse rounded bg-muted" />
         ) : (

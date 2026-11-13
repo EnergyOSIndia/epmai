@@ -3,8 +3,9 @@ import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GRAPH_TYPES, type SupplyGraphType } from "./weekSupplyData";
 
-/** "Graph Type: Category ⌄" — border turns teal while open; the selected option is tinted and ticked. */
-export function GraphTypeDropdown({ value, onChange }: { value: SupplyGraphType; onChange: (v: SupplyGraphType) => void }) {
+/** "Graph Type: Category ⌄" — border turns teal while open; the selected option is tinted and ticked.
+ *  `options` limits the list (default: every graph type). */
+export function GraphTypeDropdown({ value, onChange, options = GRAPH_TYPES }: { value: SupplyGraphType; onChange: (v: SupplyGraphType) => void; options?: typeof GRAPH_TYPES }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -16,7 +17,7 @@ export function GraphTypeDropdown({ value, onChange }: { value: SupplyGraphType;
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
   }, [open]);
 
-  const label = GRAPH_TYPES.find((g) => g.id === value)?.label ?? value;
+  const label = options.find((g) => g.id === value)?.label ?? value;
   return (
     <div ref={ref} className="relative">
       <button
@@ -30,7 +31,7 @@ export function GraphTypeDropdown({ value, onChange }: { value: SupplyGraphType;
       </button>
       {open && (
         <ul role="listbox" aria-label="Graph Type" className="absolute left-0 top-full z-30 mt-1 min-w-[170px] rounded-[10px] border bg-card p-1 shadow-lg">
-          {GRAPH_TYPES.map((g) => {
+          {options.map((g) => {
             const on = g.id === value;
             return (
               <li key={g.id} role="option" aria-selected={on}>

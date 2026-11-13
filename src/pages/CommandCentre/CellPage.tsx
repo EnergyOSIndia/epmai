@@ -41,8 +41,23 @@ export function CellPage() {
     return <Page />;
   }
 
+  // Supply Availability → Supply Bifurcation: the All-modules page for this horizon (Day ahead's
+  // date page, Week / Month ahead's Graph Type grids, Year ahead's calendar), rendered bare.
+  // Day ahead shows the Planning-horizon Supply page instead (the same page as there).
+  if (mod === "supply" && tab === "bifurcation") {
+    const Page = tf === "da" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
+    return <Page />;
+  }
+
+  // Market Intelligence → Market Detail: the Planning-horizon page for this horizon (Day ahead's
+  // Market Detail, and the same page for the week / month / year's average day), rendered bare.
+  if (mod === "mi" && tab === "marketdetail") {
+    const Page = MODULE_PAGES[mod].horizons[tf].Plan;
+    return <Page />;
+  }
+
   // Demand Tune up fills the page on its own (no section header or footer links).
-  if (isTuneupPanel) return <DemandTuneupPanel tf={tf} />;
+  if (isTuneupPanel) return <DemandTuneupPanel key={tf} tf={tf} />;
 
   return (
     <>

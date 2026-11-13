@@ -13,7 +13,9 @@ const MIN_CHART_H = 220;
  *  own clickable legend. The card fills its parent's height and the chart takes all the space left
  *  under the title and above the legend, re-sizing with the window. `names` fixes the series order /
  *  colours for API graphs. */
-export function DaySupplyChartCard({ title, type, day, names, isToday, isPast, currentBlock, isLoading }: {
+export function DaySupplyChartCard({ title, type, day, names, isToday, isPast, currentBlock, isLoading, noDemand = false }: {
+  /** No Demand line or legend item (the data has no demand). */
+  noDemand?: boolean;
   title: string;
   type: SupplyGraphType;
   day: DayData | null;
@@ -39,12 +41,12 @@ export function DaySupplyChartCard({ title, type, day, names, isToday, isPast, c
   }, []);
 
   const options = useMemo<ChartOptions | null>(
-    () => (day ? dayChartOptions({ day, type, hidden, isToday, isPast, currentBlock, height: chartH, names }) : null),
-    [day, type, hidden, isToday, isPast, currentBlock, names, chartH],
+    () => (day ? dayChartOptions({ day, type, hidden: noDemand ? new Set([...hidden, "Demand"]) : hidden, isToday, isPast, currentBlock, height: chartH, names }) : null),
+    [day, type, hidden, isToday, isPast, currentBlock, names, chartH, noDemand],
   );
   const legend: LegendEntry[] = [
     ...(names ?? seriesNames(type)).map((n) => ({ name: n, color: colorOf(type, n, names) })),
-    { name: "Demand", color: DEMAND_COLOR },
+    ...(noDemand ? [] : [{ name: "Demand", color: DEMAND_COLOR }]),
     ...(day?.rostering.length ? [{ name: "Rostering", color: type === "plants" ? PLANT_ROSTERING_COLOR : ROSTERING_COLOR, dashed: true }] : []),
   ];
 

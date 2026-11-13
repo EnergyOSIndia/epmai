@@ -96,7 +96,8 @@ const TableSkeleton = () => (
   <div className="space-y-2">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-7 animate-pulse rounded bg-muted" />)}</div>
 );
 
-/** Supply Availability · Day-ahead — Planning-horizon view. */
+/** Supply Availability · Day-ahead — Planning horizon: the Day-ahead page (Category and Technology
+ *  rows, each with its table). Command centre → Supply Bifurcation shows the same page. */
 export const SupplyAvailabilityDayAhead = DaySupplyPage;
 
 /** All modules shows the same view as the Planning horizon. */

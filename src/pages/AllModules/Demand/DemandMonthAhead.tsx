@@ -133,9 +133,8 @@ function DemandMonthAheadCalendar() {
   );
 }
 
-/** Demand · Month ahead — Planning horizon: the Forecast page for the whole month on one screen
- *  (every day's 96-block average in one chart, the average 96-block profile, error analysis and
- *  period breakdown) — see components/dayahead/DemandPeriodForecast.tsx. */
+/** Demand · Month ahead — Planning horizon: the Forecast page from the mean-demand-forecast
+ *  API (one calendar month) — see components/dayahead/DemandPeriodForecast.tsx. */
 export function DemandMonthAhead() {
   return <DemandPeriodForecast kind="month" />;
 }

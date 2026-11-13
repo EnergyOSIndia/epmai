@@ -1,6 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: ["class"],
+  // `dark:` follows the app theme (src/theme): Dark picked (data-theme="dark"), the always-dark Tech
+  // palette, or System mode on a dark OS (anything but Light picked).
+  darkMode: ["variant", [
+    '&:is([data-theme="dark"] *)',
+    '&:is([data-palette="tech"] *)',
+    '@media (prefers-color-scheme: dark) { &:not([data-theme="light"] *) }',
+  ]],
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {

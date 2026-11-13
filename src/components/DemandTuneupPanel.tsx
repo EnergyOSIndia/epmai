@@ -14,32 +14,45 @@ import {
 } from "lucide-react";
 import { cityOf, useWeather } from "@/lib/dayahead";
 import { WeatherCard } from "@/components/dayahead/WeatherCard";
+import { ForecastDateControl } from "@/components/dayahead/ForecastDateControl";
+import { MonthNavigator } from "@/components/weeksupply/MonthNavigator";
+import { WeekNavigator } from "@/components/weeksupply/WeekNavigator";
+import { getWeekRange, isoOf, monthStart, parseIso } from "@/components/weeksupply/weekSupplyData";
 import type { TfId } from "@/data/engine";
 import { store } from "@/store/store";
 import type {
   ApplyRequest, BlockMap, EnsembleRequest, ManualForecastRequest, ModelStats, Rule, RuleHistory, RuleIn, SetLineRequest,
-  SimilarDay, TuneupConfig, TuneupForecast, WeatherMulti,
+  SimilarDay, TuneupConfig, TuneupForecast, TuneupHorizon, TuneupPeriod, WeatherMulti,
 } from "@/store/features/tuneupTypes";
 import {
   DEFAULT_TUNEUP_LOCATION, TUNEUP_ACTIONS, addTuneupRule, clearTuneupRules, deleteTuneupRule, fetchSavedTuneupConfig,
   fetchSimilarDays, fetchTuneupConfig, fetchTuneupForecast, fetchTuneupRules, fetchTuneupWeather, forecastKey,
   postApply as postApplyThunk, postEnsemble as postEnsembleThunk, postManualForecast as postManualForecastThunk,
   postReset as postResetThunk, postSetline as postSetlineThunk, redoTuneupRules, reorderTuneupRules, rulesKey,
-  similarKey, tuneupToday, undoTuneupRules, updateTuneupRule, weatherKey,
+  similarKey, tuneupPeriod, tuneupToday, undoTuneupRules, updateTuneupRule, weatherKey,
 } from "@/store/slice/tuneupApiSlice";
 
 // ── tuneup API, through the tuneup slice (store/slice/tuneupApiSlice.ts) ──
 // Each call dispatches the slice's thunk and returns its answer; `peek…` read the answer the
 // slice remembered last, shown at once while a fresh copy loads (the API is slow).
+// The API works on a period — the picked date's day, Mon–Sun week or calendar month for the
+// panel's horizon (`H`, set from the Command centre horizon each render) — so these take the
+// picked date and send its period.
+let H: TuneupHorizon = "day_ahead";
+const periodOf = (date: string): TuneupPeriod => tuneupPeriod(date, H);
+const scopeOf = (location_id: number, date: string) => ({ location_id, date: periodOf(date).from_date, horizon: H });
+type Dated<T> = Omit<T, keyof TuneupPeriod> & { date: string };
+const withPeriod = <T,>({ date, ...rest }: Dated<T>) => ({ ...rest, ...periodOf(date) }) as unknown as T;
+
 const run = store.dispatch;
 const tuneup = () => store.getState().tuneup;
 const getTuneupConfig = () => run(fetchTuneupConfig()).unwrap();
 const peekTuneupConfig = async (): Promise<TuneupConfig | undefined> =>
   tuneup().config ?? (await run(fetchSavedTuneupConfig()).unwrap()) ?? undefined;
-const getTuneupForecast = (date: string, location_id: number) => run(fetchTuneupForecast({ date, location_id })).unwrap();
-const peekTuneupForecast = (date: string, location_id: number): TuneupForecast | undefined => tuneup().forecasts[forecastKey(date, location_id)];
-const getRules = (location_id: number, date: string) => run(fetchTuneupRules({ location_id, date })).unwrap();
-const peekRules = (location_id: number, date: string) => tuneup().rules[rulesKey({ location_id, date })];
+const getTuneupForecast = (date: string, location_id: number) => run(fetchTuneupForecast({ ...periodOf(date), location_id })).unwrap();
+const peekTuneupForecast = (date: string, location_id: number): TuneupForecast | undefined => tuneup().forecasts[forecastKey(periodOf(date), location_id)];
+const getRules = (location_id: number, date: string) => run(fetchTuneupRules(scopeOf(location_id, date))).unwrap();
+const peekRules = (location_id: number, date: string) => tuneup().rules[rulesKey(scopeOf(location_id, date))];
 const getSimilarDays = async (date: string, location_id: number, weather_location_id: string) =>
   ({ similar_days: await run(fetchSimilarDays({ date, location_id, weather_location_id })).unwrap() });
 const peekSimilarDays = (date: string, location_id: number, weather_location_id: string) => {
@@ -50,20 +63,31 @@ const getWeatherMulti = (date: string, location_id: number, weather_location_id?
   run(fetchTuneupWeather({ date, location_id, weather_location_id, ref_date })).unwrap();
 const peekWeatherMulti = (date: string, location_id: number, weather_location_id?: string, ref_date?: string): WeatherMulti | undefined =>
   tuneup().weather[weatherKey(date, location_id, weather_location_id, ref_date)];
-const postSetline = (payload: SetLineRequest) => run(postSetlineThunk(payload)).unwrap();
-const postManualForecast = (payload: ManualForecastRequest) => run(postManualForecastThunk(payload)).unwrap();
-const postReset = (payload: { date: string; location_id: number }) => run(postResetThunk(payload)).unwrap();
-const postEnsemble = (payload: EnsembleRequest) => run(postEnsembleThunk(payload)).unwrap();
-const postApply = (payload: ApplyRequest) => run(postApplyThunk(payload)).unwrap();
-const addRule = (location_id: number, date: string, rule: RuleIn) => run(addTuneupRule({ location_id, date, rule })).unwrap();
+const postSetline = (payload: Dated<SetLineRequest>) => run(postSetlineThunk(withPeriod<SetLineRequest>(payload))).unwrap();
+const postManualForecast = (payload: Dated<ManualForecastRequest>) => run(postManualForecastThunk(withPeriod<ManualForecastRequest>(payload))).unwrap();
+const postReset = ({ date, location_id }: { date: string; location_id: number }) => run(postResetThunk({ ...periodOf(date), location_id })).unwrap();
+const postEnsemble = (payload: Dated<EnsembleRequest>) => run(postEnsembleThunk(withPeriod<EnsembleRequest>(payload))).unwrap();
+const postApply = (payload: Dated<ApplyRequest>) => run(postApplyThunk(withPeriod<ApplyRequest>(payload))).unwrap();
+const addRule = (location_id: number, date: string, rule: RuleIn) => run(addTuneupRule({ ...scopeOf(location_id, date), rule })).unwrap();
 const updateRule = (rule_id: string, location_id: number, date: string, patch: Partial<RuleIn>) =>
-  run(updateTuneupRule({ rule_id, location_id, date, patch })).unwrap();
-const deleteRule = (rule_id: string, location_id: number, date: string) => run(deleteTuneupRule({ rule_id, location_id, date })).unwrap();
-const clearRules = (location_id: number, date: string) => run(clearTuneupRules({ location_id, date })).unwrap();
+  run(updateTuneupRule({ rule_id, ...scopeOf(location_id, date), patch })).unwrap();
+const deleteRule = (rule_id: string, location_id: number, date: string) => run(deleteTuneupRule({ rule_id, ...scopeOf(location_id, date) })).unwrap();
+const clearRules = (location_id: number, date: string) => run(clearTuneupRules(scopeOf(location_id, date))).unwrap();
 const reorderRules = (location_id: number, date: string, ordered_ids: string[]) =>
-  run(reorderTuneupRules({ location_id, date, ordered_ids })).unwrap();
-const undoRules = (location_id: number, date: string) => run(undoTuneupRules({ location_id, date })).unwrap();
-const redoRules = (location_id: number, date: string) => run(redoTuneupRules({ location_id, date })).unwrap();
+  run(reorderTuneupRules({ ...scopeOf(location_id, date), ordered_ids })).unwrap();
+const undoRules = (location_id: number, date: string) => run(undoTuneupRules(scopeOf(location_id, date))).unwrap();
+const redoRules = (location_id: number, date: string) => run(redoTuneupRules(scopeOf(location_id, date))).unwrap();
+
+/** Command centre horizon → tuneup horizon: Week / Month ahead tune the week / month; the rest a day. */
+const horizonOf = (tf: TfId): TuneupHorizon => (tf === "wk" ? "week_ahead" : tf === "mo" ? "month_ahead" : "day_ahead");
+const MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Week 09 Nov – 15 Nov 2026" / "November 2026" — the period the picked date selects. */
+function periodLabel(date: string, horizon: TuneupHorizon): string {
+  const p = tuneupPeriod(date, horizon), d = (iso: string) => `${iso.slice(8)} ${MON3[+iso.slice(5, 7) - 1]}`;
+  if (horizon === "week_ahead") return `Week ${d(p.from_date)} – ${d(p.to_date)} ${p.to_date.slice(0, 4)}`;
+  if (horizon === "month_ahead") return new Date(p.from_date + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  return "";
+}
 
 /** Warm the tab before it is opened: config, then today's forecast, rules, similar days and
  *  weather for the selected location. Errors are ignored — the tab loads normally then. */
@@ -115,7 +139,10 @@ const TABS = ["Weather", "Rules", "Control"] as const;
 type Tab = (typeof TABS)[number];
 
 export function DemandTuneupPanel({ tf }: { tf: TfId }) {
-  void tf; // tuneup keeps its own date control; horizon is informational only here.
+  // The Command centre horizon picks what is tuned: the day, the Mon–Sun week or the month of the
+  // picked date (Day / Week / Month ahead). The API wrappers above send that period.
+  const horizon = horizonOf(tf);
+  H = horizon;
 
   // ── config / selection ──────────────────────────────────────────────
   const [config, setConfig] = useState<TuneupConfig | null>(null);
@@ -466,7 +493,7 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:basis-0 lg:grow-[2.2]">
       <div className="flex min-h-[300px] min-w-0 flex-1 flex-col rounded-xl border bg-card p-4">
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[14px] font-semibold">96-Block Forecast</span>
+          <span className="text-[14px] font-semibold">96-Block Forecast{horizon !== "day_ahead" && ` · ${periodLabel(appliedDate, horizon)} (mean day)`}</span>
           <div className="mr-8 flex items-center gap-1 text-muted-foreground">
             <button type="button" aria-label="Reload" title="Reload" onClick={() => locationId != null && loadForecast(locationId, appliedDate)} className="grid h-7 w-7 place-items-center rounded-full hover:bg-accent hover:text-foreground"><RotateCw className="h-3.5 w-3.5" /></button>
             <span title="System Forecast, saved Manual Forecast and the dashed preview of a Change" className="grid h-6 w-6 place-items-center rounded-full border"><Info className="h-3 w-3" /></span>
@@ -492,8 +519,19 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
       <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:w-[30%] lg:min-w-[380px] lg:shrink-0">
         <div className="flex items-center justify-end gap-2">
           {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          <input type="date" value={date} min={config?.date_range.min} max={config?.date_range.max} aria-label="Date"
-            onChange={(e) => e.target.value && setDate(e.target.value)} className="h-9 rounded-md border bg-card px-3 text-[13px] font-medium" />
+          {/* The same period control as the Demand Forecast view: ← date → for Day ahead, the
+              week / month navigator for Week / Month ahead (forward up to the next week / month). */}
+          {horizon === "week_ahead" ? (() => {
+            const mon = getWeekRange(parseIso(date)).monday, max = getWeekRange(parseIso(tuneupToday())).monday;
+            max.setDate(max.getDate() + 7);
+            return <WeekNavigator monday={mon} canNext={mon < max} onShift={(dir) => { const d = new Date(mon); d.setDate(d.getDate() + dir * 7); setDate(isoOf(d)); }} />;
+          })() : horizon === "month_ahead" ? (() => {
+            const first = monthStart(parseIso(date)), cur = monthStart(parseIso(tuneupToday()));
+            const max = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+            return <MonthNavigator first={first} canNext={first < max} onShift={(dir) => setDate(isoOf(new Date(first.getFullYear(), first.getMonth() + dir, 1)))} />;
+          })() : (
+            <ForecastDateControl date={date} onChange={setDate} max={config?.date_range.max ?? (() => { const d = parseIso(tuneupToday()); d.setDate(d.getDate() + 7); return isoOf(d); })()} />
+          )}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">

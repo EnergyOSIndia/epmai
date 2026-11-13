@@ -7,7 +7,7 @@ export function Toggle({ on, label, onClick, locked }: { on: boolean; label: str
       title={locked ? "At least one exchange stays on" : undefined}
       className={
         "h-8 rounded-md disabled:cursor-not-allowed border px-3 text-[11px] font-semibold uppercase tracking-wide transition-colors " +
-        (on ? "border-[#2563eb] bg-[#eff6ff] text-[#1e3a8a]" : "border-slate-300 bg-white text-slate-500 hover:text-slate-700")
+        (on ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground")
       }
     >
       {label}
@@ -25,7 +25,7 @@ export function ExchangeToggles({ active, onToggle, table, onTable }: {
   return (
     <div className="flex items-center gap-1.5">
       {EXCHANGES.map((e) => <Toggle key={e} on={active.has(e)} label={e} onClick={() => onToggle(e)} locked={active.size === 1 && active.has(e)} />)}
-      <span className="mx-1.5 h-5 w-px bg-slate-200" />
+      <span className="mx-1.5 h-5 w-px bg-border" />
       <Toggle on={table} label="Table" onClick={onTable} />
     </div>
   );
@@ -40,7 +40,7 @@ export function ToggleGroup<T extends string>({ label, options, value, onChange 
 }) {
   return (
     <div className="flex items-center gap-1.5" role="radiogroup" aria-label={label}>
-      <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       {options.map((o) => <Toggle key={o} on={value === o} label={o} onClick={() => onChange(o)} />)}
     </div>
   );

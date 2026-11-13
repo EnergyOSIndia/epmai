@@ -7,6 +7,7 @@ import { SupplyDayModal } from "@/components/weeksupply/SupplyDayModal";
 import { WeekNavigator } from "@/components/weeksupply/WeekNavigator";
 import { averageDays, currentBlock, dayLong, dayTitle, fromApiDay, getWeekRange, isGraphType, isIsoDate, isoOf, mockDay, parseIso, todayIso, type SupplyGraphType } from "@/components/weeksupply/weekSupplyData";
 import { SyncDbButton } from "@/components/SyncDbButton";
+import { SupplyPeriodPage } from "@/components/weeksupply/SupplyPeriodPage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchWeekPlantSupply } from "@/store/slice/supplyApiSlice";
 
@@ -172,7 +173,8 @@ function WeekSupplyPage() {
 }
 
 /** Supply Availability · Week ahead — Planning-horizon view. */
-export const SupplyAvailabilityWeekAhead = WeekSupplyPage;
+/** Planning horizon: the Day-ahead page for the week's average day (see SupplyPeriodPage). */
+export const SupplyAvailabilityWeekAhead = () => <SupplyPeriodPage kind="week" />;
 
-/** All modules shows the same view as the Planning horizon. */
-export const SupplyAvailabilityWeekAheadModule = SupplyAvailabilityWeekAhead;
+/** All modules (and Command centre) keep the Graph Type grid / calendar. */
+export const SupplyAvailabilityWeekAheadModule = WeekSupplyPage;

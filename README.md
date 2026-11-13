@@ -27,6 +27,17 @@ src/
 
 ## Customise
 - Themes: edit `scripts/gen-themes.py`, then `python3 scripts/gen-themes.py` → `src/theme/themes.css`.
-- Router uses hash history so the single-file build works anywhere. For a server with SPA fallback,
-  switch `createHashHistory()` → `createBrowserHistory()` in `src/router.tsx`.
+- Router uses browser history with readable URLs (see "Deployment" below).
 - Real data: replace the generators in `src/data/engine.ts`; `model.ts`/`insights.ts` only read from it.
+
+## Deployment (readable URLs)
+
+The app uses normal URLs such as `/planning/week-ahead/supply-availability?week=2026-11-09` (no `#`).
+Routes are handled in the browser, so the web server must answer **every path** with `index.html`
+(SPA fallback); otherwise refreshing a deep link gives a 404. `npm run dev` / `npm run preview` already do this.
+
+- **Nginx**: in the frontend's `server` block: `location / { try_files $uri $uri/ /index.html; }`
+- **FastAPI serving `dist/`**: add a catch-all route that returns `index.html` for paths that are not `/api/…` or a real file.
+
+Old links (`/#/horizon?h=wk&mod=supply`) still work: they are moved to the readable form on load.
+The URL ↔ route mapping is in `src/lib/prettyUrls.ts`.

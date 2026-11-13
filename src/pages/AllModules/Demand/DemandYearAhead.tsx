@@ -7,8 +7,7 @@ import { fetchSeasons, fetchYearDayDemand, fetchYearDemandForecast } from "@/sto
 import { SyncDbButton } from "@/components/SyncDbButton";
 import { idbDeletePrefix } from "@/lib/idbCache";
 import { formatIso } from "../shared/HorizonControls";
-import { PeriodControl, PeriodForecastView } from "@/components/dayahead/DemandPeriodForecast";
-import type { DayAheadData } from "@/store/features/demandTypes";
+import { DemandPeriodForecast } from "@/components/dayahead/DemandPeriodForecast";
 
 type YearType = "current" | "calendar" | "financial";
 const YEAR_TYPES: { value: YearType; label: string }[] = [
@@ -16,11 +15,6 @@ const YEAR_TYPES: { value: YearType; label: string }[] = [
   { value: "calendar", label: "Calendar Year" },
   { value: "financial", label: "Financial Year" },
 ];
-
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** "2026-11-01" … "2027-10-31" → "Nov 2026 – Oct 2027". */
-const rangeText = (r: { from: string; to: string }) =>
-  `${MON[+r.from.slice(5, 7) - 1]} ${r.from.slice(0, 4)} – ${MON[+r.to.slice(5, 7) - 1]} ${r.to.slice(0, 4)}`;
 
 /** The shown year (type + offset) — shared by the Forecast page and the calendar. */
 function useYearRange() {
@@ -53,33 +47,10 @@ const yearTypeSelect = (yearType: YearType, onChange: (t: YearType) => void, cla
   </select>
 );
 
-/** Demand · Year ahead — Planning horizon: the Day-ahead Forecast page for the whole year on one
- *  screen — every series the block-by-block average of the year's days (Year-ahead forecast,
- *  data_id 102140, cached) — with the year-type select and ← year → in the KPI row. */
+/** Demand · Year ahead — Planning horizon: the Forecast page from the mean-demand-forecast API
+ *  (data_id 102140, one calendar year) — see components/dayahead/DemandPeriodForecast.tsx. */
 export function DemandYearAhead() {
-  const dispatch = useAppDispatch();
-  const { yearData, yearLoading, yearError } = useAppSelector((state) => state.demand);
-  const { yearType, setYearType, yearOffset, setYearOffset, yearRange } = useYearRange();
-  useEffect(() => {
-    dispatch(fetchYearDemandForecast({ data_id: 102140, from_date: yearRange.from, to_date: yearRange.to, location_id: 10030, forcasted_by: "System", table: "daily" }));
-  }, [dispatch, yearRange]);
-  // The stored year belongs to the shown range once its dates fall inside it.
-  const ready = !yearLoading && !!yearData && (yearData.dates.length === 0 || (yearData.dates[0] >= yearRange.from && yearData.dates[yearData.dates.length - 1] <= yearRange.to));
-  const days = useMemo<DayAheadData[]>(() => (ready && yearData ? yearData.dates.map((date, i) => ({
-    date, forecast: yearData.dem[i], actual: null, mape: null, roastering: null, udm: null, errorRanges: null, dayMape: null, manual: null, manualDayMape: null,
-  })) : []), [ready, yearData]);
-  return (
-    <PeriodForecastView
-      name="Year" days={days} ready={ready} error={yearError} fromIso={yearRange.from} toIso={yearRange.to}
-      control={
-        <PeriodControl
-          title="Forecast year" label={rangeText(yearRange)} canNext={yearOffset < 0}
-          onShift={(dir) => setYearOffset((o) => Math.min(0, o + dir))}
-          extra={yearTypeSelect(yearType, (t) => { setYearType(t); setYearOffset(0); }, "mt-1 h-6 rounded-md border bg-card px-1.5 text-[11px] font-medium")}
-        />
-      }
-    />
-  );
+  return <DemandPeriodForecast kind="year" />;
 }
 
 /** Demand · Year ahead — All modules / Command centre: the year calendar. */

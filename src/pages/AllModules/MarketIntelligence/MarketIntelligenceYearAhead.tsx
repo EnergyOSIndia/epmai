@@ -2,9 +2,10 @@ import { useState } from "react";
 import { PageHead } from "@/components/layout";
 import { DemandCalendar } from "@/components/DemandCalendar";
 import { EXCHANGES, MARKETS } from "../shared/HorizonControls";
+import { MarketDetailPage } from "@/components/marketdetail/MarketDetailPage";
 
 /** Market Intelligence · Year ahead — Planning-horizon view. */
-export function MarketIntelligenceYearAhead() {
+function MarketIntelligenceYearAheadPage() {
   // Market / Exchange are placeholders: they don't change the data yet.
   const [market, setMarket] = useState(MARKETS[0]);
   const [exchange, setExchange] = useState(EXCHANGES[0]);
@@ -36,5 +37,8 @@ export function MarketIntelligenceYearAhead() {
   );
 }
 
-/** All modules shows the same view as the Planning horizon. */
-export const MarketIntelligenceYearAheadModule = MarketIntelligenceYearAhead;
+/** Planning horizon: the Day-ahead Market Detail page for the year's average day. */
+export const MarketIntelligenceYearAhead = () => <MarketDetailPage kind="year" />;
+
+/** All modules (and Command centre's own views) keep the year-ahead page as it was. */
+export const MarketIntelligenceYearAheadModule = MarketIntelligenceYearAheadPage;
