@@ -1,8 +1,8 @@
 import type { ModulePages } from "../types";
 import { SupplyAvailabilityOverview } from "./SupplyAvailabilityOverview";
-import { SupplyAvailabilityRealTime, SupplyAvailabilityRealTimeModule } from "./SupplyAvailabilityRealTime";
-import { SupplyAvailabilityIntraDay, SupplyAvailabilityIntraDayModule } from "./SupplyAvailabilityIntraDay";
-import { SupplyAvailabilityDayAhead, SupplyAvailabilityDayAheadModule } from "./SupplyAvailabilityDayAhead";
+import { SupplyAvailabilityRealTimeModule } from "./SupplyAvailabilityRealTime";
+import { SupplyAvailabilityIntraDayModule } from "./SupplyAvailabilityIntraDay";
+import { SupplyAvailabilityDayAhead, SupplyAvailabilityDayAheadModule, SupplyAvailabilityIntraDayPlan, SupplyAvailabilityRealTimePlan } from "./SupplyAvailabilityDayAhead";
 import { SupplyAvailabilityWeekAhead, SupplyAvailabilityWeekAheadModule } from "./SupplyAvailabilityWeekAhead";
 import { SupplyAvailabilityMonthAhead, SupplyAvailabilityMonthAheadModule } from "./SupplyAvailabilityMonthAhead";
 import { SupplyAvailabilityYearAhead, SupplyAvailabilityYearAheadModule } from "./SupplyAvailabilityYearAhead";
@@ -12,8 +12,10 @@ import { SupplyAvailabilityLongTerm, SupplyAvailabilityLongTermModule } from "./
 export const SUPPLY_AVAILABILITY_PAGES: ModulePages = {
   Overview: SupplyAvailabilityOverview,
   horizons: {
-    dr: { Plan: SupplyAvailabilityRealTime, Module: SupplyAvailabilityRealTimeModule },
-    id: { Plan: SupplyAvailabilityIntraDay, Module: SupplyAvailabilityIntraDayModule },
+    // Planning horizon Real-time / Intra-day: the Day-ahead page (today up to the current block /
+    // yesterday–tomorrow). All modules keeps its own pages.
+    dr: { Plan: SupplyAvailabilityRealTimePlan, Module: SupplyAvailabilityRealTimeModule },
+    id: { Plan: SupplyAvailabilityIntraDayPlan, Module: SupplyAvailabilityIntraDayModule },
     da: { Plan: SupplyAvailabilityDayAhead, Module: SupplyAvailabilityDayAheadModule },
     wk: { Plan: SupplyAvailabilityWeekAhead, Module: SupplyAvailabilityWeekAheadModule },
     mo: { Plan: SupplyAvailabilityMonthAhead, Module: SupplyAvailabilityMonthAheadModule },

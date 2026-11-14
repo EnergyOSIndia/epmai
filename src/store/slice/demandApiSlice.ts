@@ -278,6 +278,8 @@ export const fetchMonthDayAhead = createAsyncThunk<RangeOut, RangeArgs>(
 export const fetchMeanDemandForecast = createAsyncThunk<MeanDemandData, { data_id: number; from_date: string; to_date: string }>(
     "demand/fetchMeanDemandForecast",
     async ({ data_id, from_date, to_date }) => {
+        // Intra-day (102100): no mean-demand-forecast; the day_ahead API has it (System and Manual).
+        if (data_id === 102100) return loadIntradayForecast(from_date, to_date);
         const query = new URLSearchParams({ data_id: String(data_id), location_id: "10030", from_date, to_date });
         const res = await fetch(`${BASE_URL}mean-demand-forecast?${query.toString()}`, {
             headers: { accept: "*/*" },
@@ -311,6 +313,47 @@ export const fetchMeanDemandForecast = createAsyncThunk<MeanDemandData, { data_i
         return { ...empty, period: json.ts_period, status: json.status, system: line(by("System")), manual: line(by("Manual")) };
     },
 );
+
+/** Intra-day (data_id 102100) from day_ahead?data_id=102100&from_date&to_date&location_id&forecasted_by,
+ *  as a MeanDemandData (one line each for System and Manual). Actual / MAPE / Roastering / UDM come
+ *  only up to the API's `actuals_till_block` (the current block today), so those arrays can be
+ *  shorter than 96. The API answers 200 with status "error" (forecast_not_found) when nothing is saved. */
+async function loadIntradayForecast(from_date: string, to_date: string): Promise<MeanDemandData> {
+    const empty: MeanDemandData = { dataId: 102100, from: from_date, to: to_date, period: "", status: "not_found", system: null, manual: null };
+    type Day = DayAheadApiResponse["days"][number] & { actuals_till_block?: number };
+    const get = async (by: "System" | "Manual"): Promise<Day | null> => {
+        const query = new URLSearchParams({ data_id: "102100", from_date, to_date, location_id: "10030", forecasted_by: by });
+        const res = await fetch(`${BASE_URL}day_ahead?${query.toString()}`, { headers: { accept: "*/*" } });
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error(`Failed to fetch intra-day forecast: ${res.statusText}`);
+        const json = (await res.json()) as DayAheadApiResponse & { status?: string };
+        if (json.status === "error") return null;
+        return (json.days?.find((d) => d.date === from_date) ?? json.days?.[0] ?? null) as Day | null;
+    };
+    const line = (d: Day | null): MeanForecastLine | null => {
+        if (!d?.blocks?.length) return null;
+        const byBlock = [...d.blocks].sort((a, b) => a.block - b.block);
+        const forecast = Array.from({ length: 96 }, (_, i) => Number(byBlock[i]?.forecast_value));
+        if (forecast.some((v) => Number.isNaN(v))) return null;
+        // Blocks with actuals: the first `actuals_till_block` (or as many as carry an actual).
+        const n = d.show_actuals ? Math.min(96, d.actuals_till_block ?? byBlock.filter((b) => b.actual_value != null).length) : 0;
+        const col = (pick: (b: Day["blocks"][number]) => number | undefined) => {
+            if (!n) return null;
+            const a = byBlock.slice(0, n).map((b) => Number(pick(b)));
+            return a.some((v) => Number.isNaN(v)) ? null : a;
+        };
+        return {
+            forecast,
+            actual: col((b) => b.actual_value), mape: col((b) => b.mape),
+            roastering: col((b) => b.roastering), udm: col((b) => b.udm),
+            periodMape: d.day_mape ?? null,
+        };
+    };
+    const [sys, man] = await Promise.all([get("System"), get("Manual").catch(() => null)]);
+    const system = line(sys), manual = line(man);
+    if (!system && !manual) return empty;
+    return { ...empty, period: from_date, status: "running", system, manual };
+}
 
 // 4. Year-ahead Thunk (data_id=102140). Cache-first: the saved IndexedDB copy is used when there
 // is one; `sync: true` calls the API and saves the response if it differs (see lib/idbCache.ts).
@@ -398,6 +441,28 @@ export const fetchWeather = createAsyncThunk<
     const locations: Record<string, WeatherBlocks> = {};
     Object.entries(json.locations ?? {}).forEach(([id, l]) => { if (l?.current) locations[id] = l.current; });
     return { date, locations };
+});
+
+// 7b. Planning horizon Week / Month ahead weather: weather/multi/average — every location's average
+// day over the period, 96 blocks. The API keys it block-first ("1": { temperature … }); it is turned
+// field-first (temperature: { "1": … }), the shape weather/multi uses, so the weather card is the same.
+export const fetchWeatherAverage = createAsyncThunk<
+    { from: string; to: string; locations: Record<string, WeatherBlocks> },
+    { from_date: string; to_date: string; client_id: string }
+>("demand/fetchWeatherAverage", async ({ from_date, to_date, client_id }) => {
+    const query = new URLSearchParams({ from_date, to_date, client_id });
+    const res = await fetch(`${BASE_URL}weather/multi/average?${query.toString()}`, { headers: { accept: "*/*" } });
+    if (!res.ok) throw new Error(`Failed to fetch average weather: ${res.statusText}`);
+    const json = (await res.json()) as { locations?: Record<string, Record<string, Record<string, number | null>>> };
+    const locations: Record<string, WeatherBlocks> = {};
+    Object.entries(json.locations ?? {}).forEach(([id, byBlock]) => {
+        const w: Record<string, Record<string, number>> = {};
+        Object.entries(byBlock ?? {}).forEach(([block, fields]) => {
+            Object.entries(fields ?? {}).forEach(([f, v]) => { if (v != null) (w[f] ??= {})[block] = v; });
+        });
+        locations[id] = w as unknown as WeatherBlocks;
+    });
+    return { from: from_date, to: to_date, locations };
 });
 
 // 8. Long-term Thunk (data_id=102150). The API caps a request at 1830 days, so the range is

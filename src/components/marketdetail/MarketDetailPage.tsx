@@ -16,7 +16,7 @@ import {
   EXCHANGES, MARKETS, MIN_ROW_H, getCurrentBlock, getTodayDate, type Exchange,
 } from "./marketDetailData";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchMarketDay, fetchMarketPeriod } from "@/store/slice/marketApiSlice";
+import { fetchMarketAverage, fetchMarketDay, fetchMarketPeriod } from "@/store/slice/marketApiSlice";
 
 /** Market Detail: RTM / DAM / GDAM / HPDAM clearing per exchange (IEX, PXIL, HPX) for a date,
  *  with an optional table of the chosen block. Fills the window; only the chart area scrolls.
@@ -61,12 +61,14 @@ export function MarketDetailPage({ kind = "day" }: { kind?: "day" | "week" | "mo
     return null;
   }, [kind, year, search.week, search.month, navigate]);
 
-  useEffect(() => { if (period) dispatch(fetchMarketPeriod({ from_date: period.from, to_date: period.to })); }, [dispatch, period?.from, period?.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Week / Month: the API's own average (market-graph/average); Year: market-graph averaged here.
+  const periodThunk = kind === "week" || kind === "month" ? fetchMarketAverage : fetchMarketPeriod;
+  useEffect(() => { if (period) dispatch(periodThunk({ from_date: period.from, to_date: period.to })); }, [dispatch, period?.from, period?.to, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const syncPeriod = useCallback(async () => {
     if (!period) return false;
-    const r = await dispatch(fetchMarketPeriod({ from_date: period.from, to_date: period.to, sync: true })).unwrap();
+    const r = await dispatch(periodThunk({ from_date: period.from, to_date: period.to, sync: true })).unwrap();
     return r.changed;
-  }, [dispatch, period]);
+  }, [dispatch, period, periodThunk]);
   const periodReady = !!period && market.period?.from === period.from && market.period?.to === period.to;
 
   // The shown data: the date's (Day ahead) or the period's average day.

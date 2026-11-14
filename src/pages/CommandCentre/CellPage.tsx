@@ -15,6 +15,7 @@ import { chartTitle } from "@/pages/AllModules/shared/ModuleSections";
 import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
 import { ReportLibrary } from "@/components/ReportLibrary";
 import { MODULE_PAGES } from "@/pages/AllModules";
+import { MarketOverviewChart } from "@/components/marketdetail/MarketOverviewChart";
 
 /** One grid cell (a single module at a single horizon) opened on its own page. The view — Overview
  *  (the blown-up chart) or one of the module's detail metrics — is picked from the header strip (?t). */
@@ -49,12 +50,17 @@ export function CellPage() {
     return <Page />;
   }
 
-  // Market Intelligence → Market Detail: the Planning-horizon page for this horizon (Day ahead's
-  // Market Detail, and the same page for the week / month / year's average day), rendered bare.
+  // Market Intelligence → Market Detail: Week / Month ahead show the All-modules week grid / month
+  // calendar (a chart per day); the other horizons the Planning-horizon page (Day ahead's Market
+  // Detail, the year's average day), rendered bare.
   if (mod === "mi" && tab === "marketdetail") {
-    const Page = MODULE_PAGES[mod].horizons[tf].Plan;
+    const Page = tf === "wk" || tf === "mo" ? MODULE_PAGES[mod].horizons[tf].Module : MODULE_PAGES[mod].horizons[tf].Plan;
     return <Page />;
   }
+
+  // Market Intelligence Overview at Day-ahead / Intra-day: only today's market chart (market and
+  // exchange picked above it), filling the window — Day-ahead opens on IEX DAM, Intra-day on IEX RTM.
+  if (mod === "mi" && !activeSub && (tf === "da" || tf === "id")) return <MarketOverviewChart key={tf} tf={tf} />;
 
   // Demand Tune up fills the page on its own (no section header or footer links).
   if (isTuneupPanel) return <DemandTuneupPanel key={tf} tf={tf} />;
