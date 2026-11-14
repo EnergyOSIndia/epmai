@@ -6,29 +6,38 @@ import type { SupplyDayDetail } from "@/store/features/supplyTypes";
 import { useAppDispatch } from "@/store/hooks";
 import { fetchDayPlantSupply, fetchPeriodAvgSupply } from "@/store/slice/supplyApiSlice";
 import { dayChartOptions } from "@/components/weeksupply/DayChartCard";
-import { currentBlock, fromApiDay, getWeekRange, isoOf, monthDays, monthStart, todayIso } from "@/components/weeksupply/weekSupplyData";
+import { currentBlock, fromApiDay, getWeekRange, isoOf, monthDays, todayIso } from "@/components/weeksupply/weekSupplyData";
 import { Spark } from "@/components/chart/Spark";
 
 type Loaded = { detail: SupplyDayDetail; date: string } | null;
 
-/** What each Planning-horizon Supply page opens on: today's supply, this Mon–Sun week's and this
+// The periods the Planning pages open on: tomorrow, next Mon–Sun week, next month.
+const tomorrowIso = () => { const d = istNow(); d.setDate(d.getDate() + 1); return isoOf(d); };
+const nextWeekDays = () => { const d = istNow(); d.setDate(d.getDate() + 7); return getWeekRange(d).days; };
+const nextMonthDays = () => { const n = istNow(); return monthDays(new Date(n.getFullYear(), n.getMonth() + 1, 1)); };
+/** What each Planning-horizon Supply page opens on: tomorrow's supply, next Mon–Sun week's and next
  *  month's average day (plant-supply/avg-supply). */
 const LOADERS: Partial<Record<TfId, { key: () => string; load: (d: ReturnType<typeof useAppDispatch>) => Promise<Loaded> }>> = {
-  da: {
-    key: () => `da:${todayIso()}`,
+  // Intra-day: today's supply (what the Intra-day page opens on).
+  id: {
+    key: () => `id:${todayIso()}`,
     load: (d) => d(fetchDayPlantSupply({ date: todayIso() })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.date } : null)),
   },
+  da: {
+    key: () => `da:${tomorrowIso()}`,
+    load: (d) => d(fetchDayPlantSupply({ date: tomorrowIso() })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.date } : null)),
+  },
   wk: {
-    key: () => `wk:${isoOf(getWeekRange(istNow()).monday)}`,
+    key: () => `wk:${isoOf(nextWeekDays()[0])}`,
     load: (d) => {
-      const days = getWeekRange(istNow()).days;
+      const days = nextWeekDays();
       return d(fetchPeriodAvgSupply({ from_date: isoOf(days[0]), to_date: isoOf(days[6]) })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.detail.date } : null));
     },
   },
   mo: {
-    key: () => `mo:${isoOf(monthStart(istNow()))}`,
+    key: () => `mo:${isoOf(nextMonthDays()[0])}`,
     load: (d) => {
-      const days = monthDays(monthStart(istNow()));
+      const days = nextMonthDays();
       return d(fetchPeriodAvgSupply({ from_date: isoOf(days[0]), to_date: isoOf(days[days.length - 1]) })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.detail.date } : null));
     },
   },
@@ -63,8 +72,9 @@ export function SupplyPlanSpark({ tf, fallback, height = 20 }: { tf: TfId; fallb
     if (!names.length) return null;
     const day = fromApiDay({ date, series: detail.category, demand: detail.demand }, names);
     const today = todayIso();
-    const common = tf === "da" ? { isToday: date === today, isPast: date < today, currentBlock: currentBlock() } : { isToday: false, isPast: true, currentBlock: currentBlock() };
-    return dayChartOptions({ day, type: "category", hidden: new Set(tf === "da" ? [] : ["Demand"]), height, names, compact: true, ...common });
+    const oneDay = tf === "da" || tf === "id";
+    const common = oneDay ? { isToday: date === today, isPast: date < today, currentBlock: currentBlock() } : { isToday: false, isPast: date.slice(0, 10) <= today, currentBlock: currentBlock() }; // a period not started yet: dotted
+    return dayChartOptions({ day, type: "category", hidden: new Set(oneDay ? [] : ["Demand"]), height, names, compact: true, ...common });
   }, [data, tf, height]);
 
   if (data === "none" || (data && !options)) return fallback ? <Spark spec={fallback} height={height} /> : null;

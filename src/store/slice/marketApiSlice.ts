@@ -152,6 +152,46 @@ export const fetchMarketPeriod = createAsyncThunk<
     return { from: from_date, to: to_date, ...value, changed };
 });
 
+// 4. Planning horizon Week / Month ahead: market-graph/average — the API's own 96-block average day
+// for the period, per market and exchange. The API needs `market` (empty = no data), so one call per
+// market brings all three exchanges. Cached in IndexedDB (key market-graph-average:<from>:<to>);
+// `sync: true` re-calls the API.
+type AverageBlock = { Block: number; mcp?: number | null; acp?: number | null; mcv?: number | null; acv?: number | null; sv?: number | null; sell?: number | null; purchase?: number | null };
+type AverageApiResponse = Partial<Record<"iex_avg" | "pxil_avg" | "hpx_avg", { Market: string; days?: number; blocks?: AverageBlock[] }[]>>;
+
+export const fetchMarketAverage = createAsyncThunk<
+    { from: string; to: string; days: number; detail: MarketDetailData; changed: boolean },
+    MarketQueryParams
+>("market/fetchMarketAverage", async ({ from_date, to_date, sync }) => {
+    const { value, changed } = await cachedJson(`market-graph-average:${from_date}:${to_date}`, async () => {
+        const parts = await Promise.all(MARKETS.map(async (market) => {
+            const query = new URLSearchParams({ from_date, to_date, market });
+            const res = await fetch(`${BASE_URL}market-graph/average?${query.toString()}`, { headers: { accept: "*/*" } });
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
+            return { market, json: (await res.json()) as AverageApiResponse };
+        }));
+        const detail = emptyMarketDetail();
+        let days = 0;
+        for (const { market, json } of parts) {
+            for (const e of EXCHANGES) {
+                const avg = json[`${e.toLowerCase()}_avg` as "iex_avg"]?.find((x) => x.Market === market);
+                if (!avg) continue;
+                days = Math.max(days, avg.days ?? 0);
+                for (const b of avg.blocks ?? []) {
+                    if (b.Block < 1 || b.Block > BLOCKS) continue;
+                    detail[market][e][b.Block - 1] = {
+                        block: b.Block,
+                        buyMW: b.purchase ?? 0, sellMW: b.sell ?? 0, mcvMW: b.mcv ?? 0, acvMW: b.acv ?? b.sv ?? 0,
+                        mcpPrice: b.mcp ?? 0, acpPrice: b.acp ?? 0,
+                    };
+                }
+            }
+        }
+        return { days, detail };
+    }, sync);
+    return { from: from_date, to: to_date, ...value, changed };
+});
+
 export const marketSlice = createSlice({
     name: "market",
     initialState,
@@ -177,7 +217,29 @@ export const marketSlice = createSlice({
                 state.dayError = action.error.message || "Failed to load market data";
             });
 
-        // Planning horizon Week / Month / Year (average day) Handlers
+        // Planning horizon Week / Month / Year (average day) Handlers — Week / Month from
+        // market-graph/average, Year averaged here; both land in `period`.
+        for (const thunk of [fetchMarketAverage] as const) {
+            builder
+                .addCase(thunk.pending, (state, action) => {
+                    state.periodRequestId = action.meta.requestId;
+                    if (!action.meta.arg.sync) state.periodLoading = true;
+                    state.periodError = null;
+                })
+                .addCase(thunk.fulfilled, (state, action) => {
+                    if (action.meta.requestId !== state.periodRequestId) return;
+                    state.periodLoading = false;
+                    const { from, to, days, detail } = action.payload;
+                    state.period = { from, to, days, detail };
+                })
+                .addCase(thunk.rejected, (state, action) => {
+                    if (action.meta.requestId !== state.periodRequestId) return;
+                    state.periodLoading = false;
+                    if (action.meta.arg.sync) return;
+                    state.period = { from: action.meta.arg.from_date, to: action.meta.arg.to_date, days: 0, detail: emptyMarketDetail() };
+                    state.periodError = action.error.message || "Failed to load market data";
+                });
+        }
         builder
             .addCase(fetchMarketPeriod.pending, (state, action) => {
                 state.periodRequestId = action.meta.requestId;

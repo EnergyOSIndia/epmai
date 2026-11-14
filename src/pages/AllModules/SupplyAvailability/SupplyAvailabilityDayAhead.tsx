@@ -14,8 +14,11 @@ import { fetchDayPlantSupply } from "@/store/slice/supplyApiSlice";
  *  Cost and Plants are commented out until their APIs exist) — with a date navigator and a time-block picker for the tables. Category and
  *  Technology come straight from plant-supply/by-category (not cached); Variable Cost and Plants are
  *  still mock data. Opens on today; goes forward up to tomorrow and back as far as the API has data.
- *  The date lives in the URL (?date=2026-10-28). */
-function DaySupplyPage() {
+ *  The date lives in the URL (?date=2026-10-28).
+ *  Modes (Planning horizon): "day" (Day-ahead, above); "intraday" — yesterday, today or tomorrow,
+ *  today by default; "realtime" — today up to the current block (charts stop there, the block picker
+ *  goes up to it and starts on it), following the clock. */
+function DaySupplyPage({ mode = "day" }: { mode?: "day" | "intraday" | "realtime" }) {
   const dispatch = useAppDispatch();
   const { day: detail, dayDate, dayLoading, dayError } = useAppSelector((state) => state.supply);
   const search = useSearch({ strict: false }) as { date?: string };
@@ -23,7 +26,11 @@ function DaySupplyPage() {
 
   const today = todayIso();
   const tomorrow = useMemo(() => { const d = parseIso(today); d.setDate(d.getDate() + 1); return isoOf(d); }, [today]);
-  const date = isIsoDate(search.date) ? (search.date > tomorrow ? tomorrow : search.date) : today;
+  const yesterday = useMemo(() => { const d = parseIso(today); d.setDate(d.getDate() - 1); return isoOf(d); }, [today]);
+  // Day ahead: opens on tomorrow, forward up to today + 7. Intra-day: up to tomorrow, today by default.
+  const lastDay = useMemo(() => { const d = parseIso(today); d.setDate(d.getDate() + (mode === "day" ? 7 : 1)); return isoOf(d); }, [today, mode]);
+  const asked = isIsoDate(search.date) ? (search.date > lastDay ? lastDay : search.date) : mode === "day" ? tomorrow : today;
+  const date = mode === "realtime" ? today : mode === "intraday" && asked < yesterday ? yesterday : asked;
   const setDate = (iso: string) =>
     navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, date: iso }), replace: true });
 
@@ -37,6 +44,9 @@ function DaySupplyPage() {
     return () => window.clearInterval(id);
   }, []);
   const [block, setBlock] = useState(currentBlock);
+  // Real-time: nothing after the current block.
+  const upTo = mode === "realtime" ? nowBlock : undefined;
+  const shownBlock = upTo != null && block > upTo ? upTo : block;
 
   const ready = dayDate === date && !dayLoading;
   const loading = !ready && !dayError;
@@ -51,17 +61,17 @@ function DaySupplyPage() {
   // const vcDay = useMemo(() => mockDay(date, "vc"), [date]);
   // const plantDay = useMemo(() => mockDay(date, "plants"), [date]);
 
-  const common = { isToday: date === today, isPast: date < today, currentBlock: nowBlock };
+  const common = { isToday: date === today, isPast: date < today, currentBlock: nowBlock, upTo };
 
   // Four rows: each graph type's chart with its table beside it.
   const rows = [
     {
       chart: <DaySupplyChartCard title="Supply by Category" type="category" day={catDay} names={catNames} isLoading={loading} {...common} />,
-      table: <TableCard title="Category Wise Distribution">{loading ? <TableSkeleton /> : <CategoryTable detail={api} block={block} />}</TableCard>,
+      table: <TableCard title="Category Wise Distribution">{loading ? <TableSkeleton /> : <CategoryTable detail={api} block={shownBlock} />}</TableCard>,
     },
     {
       chart: <DaySupplyChartCard title="Supply by Technology" type="technology" day={techDay} names={techNames} isLoading={loading} {...common} />,
-      table: <TableCard title="Technology Wise Distribution">{loading ? <TableSkeleton /> : <TechnologyTable detail={api} block={block} />}</TableCard>,
+      table: <TableCard title="Technology Wise Distribution">{loading ? <TableSkeleton /> : <TechnologyTable detail={api} block={shownBlock} />}</TableCard>,
     },
     // Variable Cost and Plants: no API yet, so these rows are off for now.
     // {
@@ -77,8 +87,10 @@ function DaySupplyPage() {
   return (
     <div className="space-y-3 rounded-[10px] border bg-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <DayNavigator date={date} onChange={setDate} canNext={date < tomorrow} />
-        <BlockSelect block={block} onChange={setBlock} />
+        {mode === "realtime"
+          ? <span className="inline-flex h-8 items-center rounded-[10px] border bg-card px-3 text-[12px] font-semibold">Today · Real time</span>
+          : <DayNavigator date={date} onChange={setDate} canNext={date < lastDay} canPrev={mode !== "intraday" || date > yesterday} />}
+        <BlockSelect block={shownBlock} onChange={setBlock} max={upTo} />
       </div>
       {dayError && <p className="text-[12px] text-destructive">{dayError}</p>}
       {rows.map((r, i) => (
@@ -102,3 +114,8 @@ export const SupplyAvailabilityDayAhead = DaySupplyPage;
 
 /** All modules shows the same view as the Planning horizon. */
 export const SupplyAvailabilityDayAheadModule = SupplyAvailabilityDayAhead;
+
+/** Planning horizon Real-time / Intra-day: the Day-ahead page for today up to the current block /
+ *  for yesterday, today or tomorrow. */
+export const SupplyAvailabilityRealTimePlan = () => <DaySupplyPage mode="realtime" />;
+export const SupplyAvailabilityIntraDayPlan = () => <DaySupplyPage mode="intraday" />;

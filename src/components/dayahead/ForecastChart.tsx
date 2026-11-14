@@ -105,8 +105,10 @@ function download(name: string, href: string) {
 
 /** Card A: 96-block day-ahead forecast. Actual / UDM (yellow) / Roastering / MAPE only when `actuals` is given
  *  (today or earlier); Manual Forecast + Manual MAPE only when that data exists. */
-export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast" }: {
+export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast", upTo }: {
   forecast: number[]; actuals: Actuals | null; date: string;
+  /** Last block shown (0-based): the chart stops there (Real-time: the current block). All 96 if unset. */
+  upTo?: number;
   /** Title over the full-size chart. */
   title?: string;
   /** Small-card mode (Week ahead grid): no title bar, export menu or legend; smaller axes. */
@@ -124,9 +126,10 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
   // Past days are all "done": solid to the end. Today splits at the current block.
   const cut = isToday ? liveB : BLOCKS - 1;
 
-  const rows = useMemo((): Row[] => Array.from({ length: BLOCKS }, (_, b) => {
+  const rows = useMemo((): Row[] => Array.from({ length: Math.min(BLOCKS, (upTo ?? BLOCKS - 1) + 1) }, (_, b) => {
     const r: Row = { b, t: blockTime(b), forecast: forecast[b] };
-    if (actuals) {
+    // Intra-day: actuals only up to the current block (shorter arrays) — nothing drawn after it.
+    if (actuals && actuals.actual[b] != null) {
       const a = actuals.actual[b], roast: [number, number] = [a, a + actuals.roastering[b]];
       Object.assign(r, { actual: a, roastV: actuals.roastering[b], roast, mape: actuals.mape[b] });
       // Both halves include the current block so the two segments join up.
@@ -142,7 +145,7 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
     if (actuals?.manual) r.manual = actuals.manual[b];
     if (actuals?.manualMape) r.manualMape = actuals.manualMape[b];
     return r;
-  }), [forecast, actuals, cut]);
+  }), [forecast, actuals, cut, upTo]);
 
   const items = useMemo((): LegendItem[] => [
     ...(actuals ? [{ key: "actual", label: "Actual (MW)", color: C.actual }] : []),

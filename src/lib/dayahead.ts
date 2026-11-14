@@ -1,9 +1,9 @@
 // Data for the Day-ahead Demand "Forecast" page. System Forecast, Actual, MAPE and Roastering
 // come from the day-ahead API (Redux `fetchDayAhead`, GET /day_ahead) and the weather from
 // `weather/multi` (`fetchWeather`). Manual Forecast has no API yet (marked TODO).
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchDayAhead, fetchWeather } from "@/store/slice/demandApiSlice";
+import { fetchDayAhead, fetchWeather, fetchWeatherAverage } from "@/store/slice/demandApiSlice";
 import type { WeatherBlocks } from "@/store/features/demandTypes";
 import { NOW } from "@/data/engine";
 
@@ -141,6 +141,38 @@ export function useWeather(date: string): Weather {
     return out;
   }, [weather, date]);
   return { locations: Object.keys(days), days, loading: weatherLoading, error: weatherError };
+}
+
+// Average weather, one request per period for the session.
+const avgLoads = new Map<string, Promise<Record<string, WeatherBlocks>>>();
+
+/** Every location's average day over from..to (weather/multi/average) — the Week / Month ahead
+ *  weather card. Same result shape as useWeather. Nothing is fetched while `active` is false. */
+export function useWeatherAverage(from: string, to: string, active: boolean): Weather {
+  const dispatch = useAppDispatch();
+  const [state, setState] = useState<{ key: string; locations: Record<string, WeatherBlocks> | null; error: string | null } | null>(null);
+  const key = `${from}:${to}`;
+  useEffect(() => {
+    if (!active) return;
+    if (!avgLoads.has(key)) {
+      const p = dispatch(fetchWeatherAverage({ from_date: from, to_date: to, client_id: WEATHER_CLIENT_ID })).unwrap().then((r) => r.locations);
+      p.catch(() => avgLoads.delete(key)); // a failure is retried next time
+      avgLoads.set(key, p);
+    }
+    let live = true;
+    avgLoads.get(key)!.then(
+      (locations) => { if (live) setState({ key, locations, error: null }); },
+      (e: unknown) => { if (live) setState({ key, locations: null, error: (e as Error)?.message ?? "Failed to load weather" }); },
+    );
+    return () => { live = false; };
+  }, [dispatch, key, from, to, active]);
+  const ready = state?.key === key;
+  const days = useMemo(() => {
+    const out: Record<string, WeatherDay> = {};
+    if (ready && state?.locations) Object.entries(state.locations).forEach(([id, w]) => { const d = toDay(w); if (d) out[id] = d; });
+    return out;
+  }, [ready, state]);
+  return { locations: Object.keys(days), days, loading: active && !ready, error: ready ? state!.error : null };
 }
 
 export const conditionOf = (cloud: number) => (cloud >= 70 ? "Cloudy" : cloud >= 35 ? "Partly cloudy" : "Clear sky");
