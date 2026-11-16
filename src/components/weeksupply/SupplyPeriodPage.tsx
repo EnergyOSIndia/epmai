@@ -55,18 +55,22 @@ export function SupplyPeriodPage({ kind }: { kind: SupplyPeriodKind }) {
       return { fromIso: date, toIso: date, nav: <DayNavigator date={date} onChange={setDate} canNext={date < tomorrow} /> };
     }
     if (kind === "week") {
+      // Opens on next week; forward up to 2 weeks after it; back as far as there is data.
       const cur = getWeekRange(istNow()).monday;
-      const max = new Date(cur); max.setDate(max.getDate() + 7);
-      let mon = getWeekRange(isIsoDate(search.week) ? parseIso(search.week) : istNow()).monday;
+      const next = new Date(cur); next.setDate(next.getDate() + 7);
+      const max = new Date(cur); max.setDate(max.getDate() + 21);
+      let mon = isIsoDate(search.week) ? getWeekRange(parseIso(search.week)).monday : next;
       if (mon > max) mon = max;
       const days = getWeekRange(mon).days;
       const shift = (dir: -1 | 1) => { const d = new Date(mon); d.setDate(d.getDate() + dir * 7); navigate({ to: ".", search: (p: Record<string, unknown>) => ({ ...p, week: isoOf(d) }), replace: true }); };
       return { fromIso: isoOf(days[0]), toIso: isoOf(days[6]), nav: <WeekNavigator monday={mon} canNext={mon < max} onShift={shift} /> };
     }
     if (kind === "month") {
+      // Opens on next month; forward up to 3 months after it; back as far as there is data.
       const cur = monthStart(istNow());
-      const max = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      let first = isMonthParam(search.month) ? parseIso(search.month + "-01") : cur;
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const max = new Date(cur.getFullYear(), cur.getMonth() + 4, 1);
+      let first = isMonthParam(search.month) ? parseIso(search.month + "-01") : next;
       if (first > max) first = max;
       const days = monthDays(first);
       const shift = (dir: -1 | 1) => navigate({ to: ".", search: (p: Record<string, unknown>) => ({ ...p, month: monthParam(new Date(first.getFullYear(), first.getMonth() + dir, 1)) }), replace: true });
@@ -116,7 +120,9 @@ export function SupplyPeriodPage({ kind }: { kind: SupplyPeriodKind }) {
   const today = todayIso();
   const common = kind === "day"
     ? { isToday: fromIso === today, isPast: fromIso < today, currentBlock: nowBlock }
-    : { isToday: false, isPast: true, currentBlock: block };
+    // An average day: solid for the current and past weeks / months / years; dotted for one that
+    // hasn't started yet (a forecast), like the days after today on Day ahead.
+    : { isToday: false, isPast: fromIso <= today, currentBlock: block };
   const avg = nDays ? ` · ${nDays}-day average` : "";
   const row = type === "category"
     ? {

@@ -17,7 +17,7 @@ const CARD_H = 300, HEAD_H = 40, FOOT_H = 18;
 /** Highcharts options for one day: stacked supply areas (Plants: a column per plant) with Demand
  *  and Rostering lines, a y-axis fitted to the data and the block tooltip. `compact` drops the axis
  *  labels and grid for the small month-calendar boxes. */
-export function dayChartOptions({ day, type, hidden, isToday, isPast, currentBlock, height, names, compact = false }: {
+export function dayChartOptions({ day, type, hidden, isToday, isPast, currentBlock, height, names, compact = false, upTo }: {
   day: DayData;
   type: SupplyGraphType;
   hidden: Set<string>;
@@ -27,6 +27,8 @@ export function dayChartOptions({ day, type, hidden, isToday, isPast, currentBlo
   height: number;
   names?: string[];
   compact?: boolean;
+  /** Last block shown (0-based): the x-axis stops there (Real-time: the current block). All 96 if unset. */
+  upTo?: number;
 }): ChartOptions {
   // Line style: solid on past days (and Remarks), dotted on future days, and on today solid
   // up to the current block then dotted.
@@ -139,7 +141,7 @@ export function dayChartOptions({ day, type, hidden, isToday, isPast, currentBlo
     ...common,
     yAxis: { ...common.yAxis, ...fit(lo, hi) },
     xAxis: {
-      min: 0, max: BLOCKS - 1, tickPositions: TICKS,
+      min: 0, max: upTo ?? BLOCKS - 1, tickPositions: upTo == null ? TICKS : TICKS.filter((t) => t <= upTo),
       labels: compact ? { enabled: false } : { style: AXIS, formatter(this: any) { return String(this.value + 1); } },
       ...(compact ? { tickLength: 0, lineWidth: 0 } : {}),
       crosshair: false,

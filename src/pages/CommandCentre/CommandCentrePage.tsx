@@ -8,6 +8,7 @@ import { SUBS, type SubVal } from "@/data/insights";
 import { Spark } from "@/components/chart/Spark";
 import { DemandPlanSpark, hasDemandPlanSpark } from "@/components/DemandPlanSpark";
 import { SupplyPlanSpark, hasSupplyPlanSpark } from "@/components/SupplyPlanSpark";
+import { MarketPlanSpark, hasMarketPlanSpark } from "@/components/MarketPlanSpark";
 
 // A chart-only cell (Demand / Supply Day / Week / Month) fills the height of a regular cell's
 // number row + mini chart + text line: the mini chart's height plus this.
@@ -229,7 +230,7 @@ function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, chartH, onToggl
 
         {TFS.map((t) => {
           const g = G(mod, t.id), s = g.sum, faded = dim(s.st);
-          const planChart = (mod === "demand" && hasDemandPlanSpark(t.id)) || (mod === "supply" && hasSupplyPlanSpark(t.id));
+          const planChart = (mod === "demand" && hasDemandPlanSpark(t.id)) || (mod === "supply" && hasSupplyPlanSpark(t.id)) || (mod === "mi" && hasMarketPlanSpark(t.id));
           return (
             <td key={t.id} className={cn("border-t border-border/70 p-1 align-top", faded && "opacity-25")}>
               <Link to="/cell/$moduleId" params={{ moduleId: mod }} search={{ m: t.id }}
@@ -241,6 +242,7 @@ function ModuleRows({ mod, name, sub, subN, open, view, tf, dim, chartH, onToggl
                   <>
                     <span className="block" style={{ height: chartH + PLAN_EXTRA_H }}>
                       {mod === "demand" ? <DemandPlanSpark tf={t.id} fallback={g.chart} height={chartH + PLAN_EXTRA_H} />
+                        : mod === "mi" && hasMarketPlanSpark(t.id) ? <MarketPlanSpark tf={t.id} fallback={g.chart} height={chartH + PLAN_EXTRA_H} />
                         : <SupplyPlanSpark tf={t.id} fallback={g.chart} height={chartH + PLAN_EXTRA_H} />}
                     </span>
                     <SquareArrowOutUpRight className="absolute right-1.5 top-1.5 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/cell:opacity-100" />

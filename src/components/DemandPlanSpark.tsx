@@ -4,16 +4,22 @@ import type { ChartSpec } from "@/data/model";
 import type { MeanDemandData } from "@/store/features/demandTypes";
 import { useAppDispatch } from "@/store/hooks";
 import { fetchMeanDemandForecast } from "@/store/slice/demandApiSlice";
-import { getWeekRange, isoOf, monthDays, monthStart, todayIso } from "@/components/weeksupply/weekSupplyData";
+import { getWeekRange, isoOf, monthDays, todayIso } from "@/components/weeksupply/weekSupplyData";
 import { Spark } from "@/components/chart/Spark";
 import { ForecastChart } from "@/components/dayahead/ForecastChart";
 import { buildActuals } from "@/lib/dayahead";
 
-/** The period each Planning-horizon Demand page opens on: today, this Mon–Sun week, this month. */
+// The periods the Planning pages open on: tomorrow, next Mon–Sun week, next month.
+const tomorrowIso = () => { const d = istNow(); d.setDate(d.getDate() + 1); return isoOf(d); };
+const nextWeekDays = () => { const d = istNow(); d.setDate(d.getDate() + 7); return getWeekRange(d).days; };
+const nextMonthDays = () => { const n = istNow(); return monthDays(new Date(n.getFullYear(), n.getMonth() + 1, 1)); };
+/** The period each Planning-horizon Demand page opens on: tomorrow, next Mon–Sun week, next month. */
 const PERIODS: Partial<Record<TfId, () => { data_id: number; from_date: string; to_date: string }>> = {
-  da: () => ({ data_id: 102110, from_date: todayIso(), to_date: todayIso() }),
-  wk: () => { const d = getWeekRange(istNow()).days; return { data_id: 102120, from_date: isoOf(d[0]), to_date: isoOf(d[6]) }; },
-  mo: () => { const d = monthDays(monthStart(istNow())); return { data_id: 102130, from_date: isoOf(d[0]), to_date: isoOf(d[d.length - 1]) }; },
+  // Intra-day: today (what the Intra-day page opens on), the same day forecast.
+  id: () => ({ data_id: 102110, from_date: todayIso(), to_date: todayIso() }),
+  da: () => ({ data_id: 102110, from_date: tomorrowIso(), to_date: tomorrowIso() }),
+  wk: () => { const d = nextWeekDays(); return { data_id: 102120, from_date: isoOf(d[0]), to_date: isoOf(d[6]) }; },
+  mo: () => { const d = nextMonthDays(); return { data_id: 102130, from_date: isoOf(d[0]), to_date: isoOf(d[d.length - 1]) }; },
 };
 export const hasDemandPlanSpark = (tf: TfId) => tf in PERIODS;
 
@@ -52,7 +58,7 @@ export function DemandPlanSpark({ tf, fallback, height = 20 }: { tf: TfId; fallb
   return (
     // No hover / tooltip in the grid cell: the chart is just a picture (clicks go to the cell's link).
     <span className="pointer-events-none block" style={{ height }}>
-      <ForecastChart forecast={chart.forecast} actuals={chart.actuals} date={tf === "da" ? period.from_date : tf === "wk" ? "week" : "month"} bare />
+      <ForecastChart forecast={chart.forecast} actuals={chart.actuals} date={tf === "da" || tf === "id" ? period.from_date : tf === "wk" ? "week" : "month"} bare />
     </span>
   );
 }
