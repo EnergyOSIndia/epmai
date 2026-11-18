@@ -57,7 +57,7 @@ export function AppShell() {
   const isCellSupplyBifurcation = isCell && ((cellMod === "supply" && cellTab === "bifurcation") || (cellMod === "mi" && cellTab === "marketdetail"));
   // Market Intelligence's Overview cell view at Day-ahead / Intra-day: just the one market chart, full window.
   const cellTf = isCell ? (location.search as { m?: string }).m ?? readLocalTf("epm.m") : null;
-  const isCellMiOverview = isCell && cellMod === "mi" && (!cellTab || cellTab === "overview") && (cellTf === "da" || cellTf === "id");
+  const isCellMiOverview = isCell && cellMod === "mi" && (!cellTab || cellTab === "overview") && (cellTf === "da" || cellTf === "id" || cellTf === "wk" || cellTf === "mo");
   // The Planning-horizon page at Month ahead is the UP DC demand calendar, which wants the full window.
   // All modules → a module's horizon page (/modules/X?m=) shows the same view as the Planning
   // horizon, so it follows the same width rules, read from its own module and horizon.

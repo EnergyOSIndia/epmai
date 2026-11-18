@@ -35,12 +35,12 @@ export function dayChartOptions({ day, type, hidden, isToday, isPast, currentBlo
   const style = (base: "Solid" | "ShortDash") => isToday
     ? { dashStyle: base, zoneAxis: "x" as const, zones: [{ value: currentBlock, dashStyle: base }, { dashStyle: "Dot" as const }] }
     : { dashStyle: isPast ? base : ("Dot" as const) };
-  // The y-axis spans exactly the data shown (visible series): from the lowest point (0 unless
-  // something goes negative) to the highest stack or line — no rounding out to the next tick.
-  const fit = (lo: number, hi: number) => ({
-    min: Math.min(0, lo), max: hi > Math.min(0, lo) ? hi : Math.min(0, lo) + 1,
-    startOnTick: false, endOnTick: false, minPadding: 0, maxPadding: 0,
-  });
+  // The y-axis covers the data shown (visible series): from the lowest point (0 unless something
+  // goes negative) to the highest stack or line (Demand included). Full-size charts round out to
+  // the next tick so the top and bottom are labelled; the tiny (compact) ones fit exactly.
+  const fit = (lo: number, hi: number) => compact
+    ? { min: Math.min(0, lo), max: hi > Math.min(0, lo) ? hi : Math.min(0, lo) + 1, startOnTick: false, endOnTick: false, minPadding: 0, maxPadding: 0 }
+    : { min: undefined, max: undefined, softMin: Math.min(0, lo), softMax: hi > Math.min(0, lo) ? hi : Math.min(0, lo) + 1, startOnTick: true, endOnTick: true, minPadding: 0, maxPadding: 0.02 };
   const common: ChartOptions = {
     chart: {
       animation: false, height, spacing: compact ? [2, 0, 0, 0] : [8, 6, 6, 4], backgroundColor: "transparent", style: { fontFamily: "inherit" },
