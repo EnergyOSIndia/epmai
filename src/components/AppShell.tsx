@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Link, Outlet, useLocation } from "@tanstack/react-router";
-import { BookOpen, FileText, Globe, Home } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { BookOpen, FileText, Globe, Home, Loader2 } from "lucide-react";
 import { Toaster } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +17,12 @@ import { ModuleRuler } from "./ModuleRuler";
 import { ModuleNav } from "./ModuleNav";
 import { SidePanel } from "./SidePanel";
 import { ThemeMenu } from "./ThemeMenu";
+import { UserMenu } from "./UserMenu";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchMe, markBootstrapped } from "@/store/slice/authSlice";
+import { getAccessToken } from "@/lib/auth";
+
+const AUTH_PATHS = ["/login", "/verify-otp"];
 
 const navCls = "rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
 const navActive = { className: "!bg-accent !text-foreground font-semibold" };
@@ -35,6 +41,45 @@ export function AppShell() {
   const location = useLocation();
   const { pathname } = location;
   const toastTheme = palette === "tech" ? "dark" : mode === "system" ? "system" : mode;
+
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { accessToken, bootstrapped } = useAppSelector((s) => s.auth);
+  const isAuthPage = AUTH_PATHS.includes(pathname);
+
+  // First load: if a token is stored, confirm it by loading the profile; otherwise mark the auth
+  // check done so the guard can run.
+  useEffect(() => {
+    if (bootstrapped) return;
+    if (getAccessToken()) dispatch(fetchMe());
+    else dispatch(markBootstrapped());
+  }, [bootstrapped, dispatch]);
+
+  // Route guard: once the auth check is done, keep unauthenticated users on the login/OTP pages.
+  useEffect(() => {
+    if (bootstrapped && !accessToken && !isAuthPage) navigate({ to: "/login" });
+  }, [bootstrapped, accessToken, isAuthPage, navigate]);
+
+  // Login / OTP pages render without the app chrome.
+  if (isAuthPage) {
+    return (
+      <div className="min-h-full">
+        <Outlet />
+        <Toaster position="bottom-right" theme={toastTheme} richColors closeButton />
+      </div>
+    );
+  }
+
+  // Waiting on the first auth check, or redirecting an unauthenticated user — show nothing but a
+  // spinner rather than a flash of the protected app.
+  if (!bootstrapped || !accessToken) {
+    return (
+      <div className="grid min-h-full place-items-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+        <Toaster position="bottom-right" theme={toastTheme} richColors closeButton />
+      </div>
+    );
+  }
   const isCommand = pathname === "/";
   const isHorizon = pathname === "/horizon";
   const isModulesIndex = pathname === "/modules";
@@ -130,6 +175,7 @@ export function AppShell() {
               </Select>
 
               <ThemeMenu />
+              <UserMenu />
             </div>
 
             {/* module selector, only on the all-horizons page */}

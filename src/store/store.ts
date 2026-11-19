@@ -3,6 +3,7 @@ import demandReducer from "./slice/demandApiSlice";
 import supplyReducer from "./slice/supplyApiSlice";
 import marketReducer from "./slice/marketApiSlice";
 import tuneupReducer from "./slice/tuneupApiSlice";
+import authReducer from "./slice/authSlice";
 
 export const store = configureStore({
     reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
         supply: supplyReducer,
         market: marketReducer,
         tuneup: tuneupReducer,
+        auth: authReducer,
     },
 });
 

@@ -11,6 +11,9 @@ import { SnapshotPage } from "@/pages/AllModules/SnapshotPage";
 import { PlanningHorizonPage } from "@/pages/PlanningHorizon/PlanningHorizonPage";
 import { ReportsPage } from "@/pages/Reports/ReportsPage";
 import { GlossaryPage } from "@/pages/Glossary/GlossaryPage";
+import { LoginPage } from "@/pages/Auth/LoginPage";
+import { VerifyOtpPage } from "@/pages/Auth/VerifyOtpPage";
+import { ProfilePage } from "@/pages/Profile/ProfilePage";
 import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
 import { prettyUrls, upgradeHashUrl } from "@/lib/prettyUrls";
 
@@ -43,6 +46,9 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/horizon", component: PlanningHorizonPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/reports", component: ReportsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/glossary", component: GlossaryPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/login", component: LoginPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/verify-otp", component: VerifyOtpPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/profile", component: ProfilePage }),
 ]);
 
 // Browser history with readable URLs (/planning/week-ahead/supply-availability …): `prettyUrls`
