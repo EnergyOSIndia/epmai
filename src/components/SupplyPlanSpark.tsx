@@ -4,7 +4,7 @@ import { istNow, type TfId } from "@/data/engine";
 import type { ChartSpec } from "@/data/model";
 import type { SupplyDayDetail } from "@/store/features/supplyTypes";
 import { useAppDispatch } from "@/store/hooks";
-import { fetchDayPlantSupply, fetchPeriodAvgSupply } from "@/store/slice/supplyApiSlice";
+import { AVG_SUPPLY_ID, fetchDayAvgSupply, fetchPeriodAvgSupply } from "@/store/slice/supplyApiSlice";
 import { dayChartOptions } from "@/components/weeksupply/DayChartCard";
 import { currentBlock, fromApiDay, getWeekRange, isoOf, monthDays, todayIso } from "@/components/weeksupply/weekSupplyData";
 import { Spark } from "@/components/chart/Spark";
@@ -21,24 +21,24 @@ const LOADERS: Partial<Record<TfId, { key: () => string; load: (d: ReturnType<ty
   // Intra-day: today's supply (what the Intra-day page opens on).
   id: {
     key: () => `id:${todayIso()}`,
-    load: (d) => d(fetchDayPlantSupply({ date: todayIso() })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.date } : null)),
+    load: (d) => d(fetchDayAvgSupply({ date: todayIso(), data_id: AVG_SUPPLY_ID.intraday })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.date } : null)),
   },
   da: {
     key: () => `da:${tomorrowIso()}`,
-    load: (d) => d(fetchDayPlantSupply({ date: tomorrowIso() })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.date } : null)),
+    load: (d) => d(fetchDayAvgSupply({ date: tomorrowIso() })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.date } : null)),
   },
   wk: {
     key: () => `wk:${isoOf(nextWeekDays()[0])}`,
     load: (d) => {
       const days = nextWeekDays();
-      return d(fetchPeriodAvgSupply({ from_date: isoOf(days[0]), to_date: isoOf(days[6]) })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.detail.date } : null));
+      return d(fetchPeriodAvgSupply({ data_id: AVG_SUPPLY_ID.week, from_date: isoOf(days[0]), to_date: isoOf(days[6]) })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.detail.date } : null));
     },
   },
   mo: {
     key: () => `mo:${isoOf(nextMonthDays()[0])}`,
     load: (d) => {
       const days = nextMonthDays();
-      return d(fetchPeriodAvgSupply({ from_date: isoOf(days[0]), to_date: isoOf(days[days.length - 1]) })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.detail.date } : null));
+      return d(fetchPeriodAvgSupply({ data_id: AVG_SUPPLY_ID.month, from_date: isoOf(days[0]), to_date: isoOf(days[days.length - 1]) })).unwrap().then((r) => (r.detail ? { detail: r.detail, date: r.detail.date } : null));
     },
   },
 };
@@ -49,7 +49,7 @@ const loads = new Map<string, Promise<Loaded>>();
 
 /** Command centre · Supply Availability Day / Week / Month ahead cell: the Planning horizon's
  *  "Supply by Category" chart in miniature (same stacks, colours and Demand / Rostering lines;
- *  Week / Month have no Demand). Just a picture: no hover or tooltip. Falls back to `fallback`
+ *  Week / Month show their average day's Demand). Just a picture: no hover or tooltip. Falls back to `fallback`
  *  (the sample chart) when there is no data. */
 export function SupplyPlanSpark({ tf, fallback, height = 20 }: { tf: TfId; fallback?: ChartSpec; height?: number }) {
   const dispatch = useAppDispatch();
@@ -74,7 +74,7 @@ export function SupplyPlanSpark({ tf, fallback, height = 20 }: { tf: TfId; fallb
     const today = todayIso();
     const oneDay = tf === "da" || tf === "id";
     const common = oneDay ? { isToday: date === today, isPast: date < today, currentBlock: currentBlock() } : { isToday: false, isPast: date.slice(0, 10) <= today, currentBlock: currentBlock() }; // a period not started yet: dotted
-    return dayChartOptions({ day, type: "category", hidden: new Set(oneDay ? [] : ["Demand"]), height, names, compact: true, ...common });
+    return dayChartOptions({ day, type: "category", hidden: new Set<string>(), height, names, compact: true, ...common });
   }, [data, tf, height]);
 
   if (data === "none" || (data && !options)) return fallback ? <Spark spec={fallback} height={height} /> : null;

@@ -15,7 +15,7 @@ import { chartTitle } from "@/pages/AllModules/shared/ModuleSections";
 import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
 import { ReportLibrary } from "@/components/ReportLibrary";
 import { MODULE_PAGES } from "@/pages/AllModules";
-import { MarketOverviewChart } from "@/components/marketdetail/MarketOverviewChart";
+import { MarketOverviewChart, isMiTf } from "@/components/marketdetail/MarketOverviewChart";
 
 /** One grid cell (a single module at a single horizon) opened on its own page. The view — Overview
  *  (the blown-up chart) or one of the module's detail metrics — is picked from the header strip (?t). */
@@ -37,8 +37,8 @@ export function CellPage() {
   // horizon for this horizon — rendered bare (no PageHead/Section/footer), exactly like /horizon.
   if (isDashboard) {
     // The All-modules page: Week / Month ahead keep their grid / calendar here (Day ahead is the same);
-    // Year ahead shows the Planning-horizon Forecast page (the whole year on one screen).
-    const Page = tf === "yr" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
+    // Year ahead its average-demand-per-date heatmap and daily distribution.
+    const Page = MODULE_PAGES[mod].horizons[tf].Module;
     return <Page />;
   }
 
@@ -58,9 +58,9 @@ export function CellPage() {
     return <Page />;
   }
 
-  // Market Intelligence Overview at Day-ahead / Intra-day: only today's market chart (market and
-  // exchange picked above it), filling the window — Day-ahead opens on IEX DAM, Intra-day on IEX RTM.
-  if (mod === "mi" && !activeSub && (tf === "da" || tf === "id")) return <MarketOverviewChart key={tf} tf={tf} />;
+  // Market Intelligence Overview at Intra-day / Day / Week / Month ahead: only one market chart (market
+  // and exchange picked above it) filling the window: today, or the current week's / month's average day.
+  if (mod === "mi" && !activeSub && isMiTf(tf)) return <MarketOverviewChart key={tf} tf={tf} />;
 
   // Demand Tune up fills the page on its own (no section header or footer links).
   if (isTuneupPanel) return <DemandTuneupPanel key={tf} tf={tf} />;

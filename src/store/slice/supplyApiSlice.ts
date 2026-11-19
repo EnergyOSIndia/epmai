@@ -209,49 +209,75 @@ export const fetchAvgSupply = createAsyncThunk<AvgSupply, { from_date: string; t
     },
 );
 
-// avg-supply splits each group into central and state rows.
-type AvgSupplyRow = { category?: string; technology?: string; avg_sg: number; blocks?: number[] };
-type AvgSupplyResponse = { days: number; central?: AvgSupplyRow[]; state?: AvgSupplyRow[] };
+// plant-supply/avg-supply?data_id&from_date&to_date&group_by&include_blocks — one row per category /
+// technology with its 96 blocks, each block split central_sg / state_sg (null where that side has
+// none), plus the period's demand per block (forecast_demand, and actual_demand once it has happened).
+type AvgSupplyBlock = { block: number; central_sg: number | null; state_sg: number | null; sg: number | null; actual_demand?: number | null; forecast_demand?: number | null };
+type AvgSupplyRow = { category?: string; technology?: string; avg_sg: number | null; central_avg_sg?: number | null; state_avg_sg?: number | null; blocks?: AvgSupplyBlock[] };
+type AvgSupplyResponse = { days: number; data?: AvgSupplyRow[] };
 
-// Planning horizon Week / Month ahead: plant-supply/avg-supply — the API's own 96-block average SG
-// per category and per technology over the range, split central / state (no demand). Cached in
-// IndexedDB; `sync: true` re-calls the API.
+/** data_id of each Planning horizon for avg-supply. */
+export const AVG_SUPPLY_ID = { intraday: 102100, day: 102110, week: 102120, month: 102130 } as const;
+
+/** avg-supply (category + technology) → one SupplyDayDetail labelled `label`; null when all zero. */
+async function loadAvgSupply(data_id: number, from_date: string, to_date: string, label: string): Promise<{ days: number; detail: SupplyDayDetail | null }> {
+    const load = async (group_by: "category" | "technology") => {
+        const query = new URLSearchParams({ data_id: String(data_id), from_date, to_date, group_by, include_blocks: "true" });
+        const res = await fetch(`${BASE_URL}plant-supply/avg-supply?${query.toString()}`, { headers: { accept: "*/*" } });
+        if (!res.ok) {
+            let detail = res.statusText;
+            try { const b = await res.json(); detail = b?.detail?.message ?? detail; } catch { /* keep statusText */ }
+            throw new Error(`Failed to fetch average supply: ${detail}`);
+        }
+        return (await res.json()) as AvgSupplyResponse;
+    };
+    const [cat, tech] = await Promise.all([load("category"), load("technology")]);
+    const r2 = (v: unknown) => Math.round((Number(v) || 0) * 100) / 100;
+    // One field of a row's blocks, in block order (96 values, missing = 0).
+    const col = (row: AvgSupplyRow, pick: (b: AvgSupplyBlock) => number | null | undefined) => {
+        const out = new Array<number>(BLOCKS).fill(0);
+        for (const b of row.blocks ?? []) if (b.block >= 1 && b.block <= BLOCKS) out[b.block - 1] = r2(pick(b));
+        return out;
+    };
+    const hasSide = (row: AvgSupplyRow, side: "central_sg" | "state_sg") => (row.blocks ?? []).some((b) => b[side] != null);
+    const catRows = cat.data ?? [], techRows = tech.data ?? [];
+    // Category: central rows first, then state (a category with both sides gives one row each).
+    const category = [
+        ...catRows.filter((x) => hasSide(x, "central_sg")).map((x) => ({ name: x.category ?? "", group: "Central" as const, data: col(x, (b) => b.central_sg) })),
+        ...catRows.filter((x) => hasSide(x, "state_sg")).map((x) => ({ name: x.category ?? "", group: "State" as const, data: col(x, (b) => b.state_sg) })),
+    ];
+    // Technology: one row per technology with its central and state parts, data = their sum.
+    const technology = techRows.map((x) => {
+        const central = col(x, (b) => b.central_sg), state = col(x, (b) => b.state_sg);
+        return { name: x.technology ?? "", central, state, data: central.map((v, i) => r2(v + state[i])) };
+    });
+    // Demand: a single day shows the actual where the API has it, else the forecast; a week / month
+    // (its average day) the forecast average, else the actual average.
+    const first = catRows[0] ?? techRows[0];
+    const oneDay = from_date === to_date;
+    const demand = first
+        ? col(first, (b) => (oneDay ? b.actual_demand ?? b.forecast_demand : b.forecast_demand ?? b.actual_demand))
+        : new Array<number>(BLOCKS).fill(0);
+    const empty = category.every((x) => x.data.every((v) => !v)) && technology.every((x) => x.data.every((v) => !v));
+    return { days: cat.days ?? 0, detail: empty ? null : { date: label, demand, category, technology } };
+}
+
+// Planning horizon Day ahead / Intra-day: plant-supply/avg-supply (data_id 102110 / 102100) for one
+// date, as that date's detail (same shape as by-category, with the actual / forecast demand line).
+export const fetchDayAvgSupply = createAsyncThunk<{ date: string; detail: SupplyDayDetail | null }, { date: string; data_id?: number }>(
+    "supply/fetchDayAvgSupply",
+    async ({ date, data_id = AVG_SUPPLY_ID.day }) => ({ date, detail: (await loadAvgSupply(data_id, date, date, date)).detail }),
+);
+
+// Planning horizon Week / Month ahead: plant-supply/avg-supply (data_id 102120 / 102130) — the API's
+// own 96-block average SG per category and per technology over the range, split central / state.
+// Cached in IndexedDB; `sync: true` re-calls the API.
 export const fetchPeriodAvgSupply = createAsyncThunk<
     { from: string; to: string; days: number; detail: SupplyDayDetail | null; changed: boolean },
-    { from_date: string; to_date: string; sync?: boolean }
->("supply/fetchPeriodAvgSupply", async ({ from_date, to_date, sync }) => {
-    const { value, changed } = await cachedJson(`avg-supply-cs:${from_date}:${to_date}`, async () => {
-        const load = async (group_by: "category" | "technology") => {
-            const query = new URLSearchParams({ from_date, to_date, group_by, include_blocks: "true" });
-            const res = await fetch(`${BASE_URL}plant-supply/avg-supply?${query.toString()}`, { headers: { accept: "*/*" } });
-            if (!res.ok) throw new Error(`Failed to fetch average supply: ${res.statusText}`);
-            return (await res.json()) as AvgSupplyResponse;
-        };
-        const [cat, tech] = await Promise.all([load("category"), load("technology")]);
-        const r2 = (v: unknown) => Math.round((Number(v) || 0) * 100) / 100;
-        const blocks = (b: number[] | undefined) => Array.from({ length: BLOCKS }, (_, i) => r2(b?.[i]));
-        // Category: central rows first, then state.
-        const category = [
-            ...(cat.central ?? []).map((x) => ({ name: x.category ?? "", group: "Central" as const, data: blocks(x.blocks) })),
-            ...(cat.state ?? []).map((x) => ({ name: x.category ?? "", group: "State" as const, data: blocks(x.blocks) })),
-        ];
-        // Technology: one row per technology with its central and state parts, data = their sum.
-        const tmap = new Map<string, { name: string; central: number[]; state: number[]; data: number[] }>();
-        const zero = () => new Array<number>(BLOCKS).fill(0);
-        const techRow = (name: string) => tmap.get(name) ?? (tmap.set(name, { name, central: zero(), state: zero(), data: zero() }), tmap.get(name)!);
-        for (const [side, rows] of [["central", tech.central ?? []], ["state", tech.state ?? []]] as const) {
-            for (const x of rows) {
-                const t = techRow(x.technology ?? ""), b = blocks(x.blocks);
-                b.forEach((v, i) => { t[side][i] = v; t.data[i] = r2(t.data[i] + v); });
-            }
-        }
-        const technology = [...tmap.values()];
-        const empty = category.every((x) => x.data.every((v) => !v)) && technology.every((x) => x.data.every((v) => !v));
-        return {
-            days: cat.days ?? 0,
-            detail: empty ? null : { date: `${from_date}:${to_date}`, demand: new Array(BLOCKS).fill(0), category, technology },
-        };
-    }, sync);
+    { data_id: number; from_date: string; to_date: string; sync?: boolean }
+>("supply/fetchPeriodAvgSupply", async ({ data_id, from_date, to_date, sync }) => {
+    const { value, changed } = await cachedJson(`avg-supply-v3:${data_id}:${from_date}:${to_date}`,
+        () => loadAvgSupply(data_id, from_date, to_date, `${from_date}:${to_date}`), sync);
     return { from: from_date, to: to_date, ...value, changed };
 });
 
@@ -355,6 +381,23 @@ export const supplySlice = createSlice({
                 state.dayDate = action.payload.date;
             })
             .addCase(fetchDayPlantSupply.rejected, (state, action) => {
+                if (action.meta.requestId !== state.dayRequestId) return;
+                state.dayLoading = false;
+                state.dayError = action.error.message || "Failed to load plant supply";
+            })
+            // Planning horizon Day ahead (avg-supply, 102110) fills the same day state.
+            .addCase(fetchDayAvgSupply.pending, (state, action) => {
+                state.dayRequestId = action.meta.requestId;
+                state.dayLoading = true;
+                state.dayError = null;
+            })
+            .addCase(fetchDayAvgSupply.fulfilled, (state, action) => {
+                if (action.meta.requestId !== state.dayRequestId) return;
+                state.dayLoading = false;
+                state.day = action.payload.detail;
+                state.dayDate = action.payload.date;
+            })
+            .addCase(fetchDayAvgSupply.rejected, (state, action) => {
                 if (action.meta.requestId !== state.dayRequestId) return;
                 state.dayLoading = false;
                 state.dayError = action.error.message || "Failed to load plant supply";

@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { istNow } from "@/data/engine";
 import { SyncDbButton } from "@/components/SyncDbButton";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchDayPlantSupply, fetchPeriodAvgSupply, fetchPeriodPlantSupply } from "@/store/slice/supplyApiSlice";
+import { AVG_SUPPLY_ID, fetchDayPlantSupply, fetchPeriodAvgSupply, fetchPeriodPlantSupply } from "@/store/slice/supplyApiSlice";
 import { BlockSelect, DayNavigator } from "./DayControls";
 import { DaySupplyChartCard } from "./DaySupplyChartCard";
 import { GraphTypeDropdown } from "./GraphTypeDropdown";
@@ -86,12 +86,12 @@ export function SupplyPeriodPage({ kind }: { kind: SupplyPeriodKind }) {
   useEffect(() => {
     if (kind === "day") dispatch(fetchDayPlantSupply({ date: fromIso }));
     // Week / Month: the API's own average (plant-supply/avg-supply); Year: the days averaged here.
-    else if (kind === "week" || kind === "month") dispatch(fetchPeriodAvgSupply({ from_date: fromIso, to_date: toIso }));
+    else if (kind === "week" || kind === "month") dispatch(fetchPeriodAvgSupply({ data_id: AVG_SUPPLY_ID[kind], from_date: fromIso, to_date: toIso }));
     else dispatch(fetchPeriodPlantSupply({ from_date: fromIso, to_date: toIso }));
   }, [dispatch, kind, fromIso, toIso]);
   const syncDb = useCallback(async () => {
     const args = { from_date: fromIso, to_date: toIso, sync: true };
-    const r = await (kind === "week" || kind === "month" ? dispatch(fetchPeriodAvgSupply(args)) : dispatch(fetchPeriodPlantSupply(args))).unwrap();
+    const r = await (kind === "week" || kind === "month" ? dispatch(fetchPeriodAvgSupply({ ...args, data_id: AVG_SUPPLY_ID[kind] })) : dispatch(fetchPeriodPlantSupply(args))).unwrap();
     return r.changed;
   }, [dispatch, kind, fromIso, toIso]);
 
@@ -126,11 +126,11 @@ export function SupplyPeriodPage({ kind }: { kind: SupplyPeriodKind }) {
   const avg = nDays ? ` · ${nDays}-day average` : "";
   const row = type === "category"
     ? {
-      chart: <DaySupplyChartCard title={`Supply by Category${avg}`} type="category" day={catDay} names={catNames} isLoading={loading} noDemand={kind === "week" || kind === "month"} {...common} />,
+      chart: <DaySupplyChartCard title={`Supply by Category${avg}`} type="category" day={catDay} names={catNames} isLoading={loading} {...common} />,
       table: <TableCard title="Category Wise Distribution">{loading ? <TableSkeleton /> : <CategoryTable detail={api} block={block} />}</TableCard>,
     }
     : {
-      chart: <DaySupplyChartCard title={`Supply by Technology${avg}`} type="technology" day={techDay} names={techNames} isLoading={loading} noDemand={kind === "week" || kind === "month"} {...common} />,
+      chart: <DaySupplyChartCard title={`Supply by Technology${avg}`} type="technology" day={techDay} names={techNames} isLoading={loading} {...common} />,
       table: <TableCard title="Technology Wise Distribution">{loading ? <TableSkeleton /> : <TechnologyTable detail={api} block={block} />}</TableCard>,
     };
 

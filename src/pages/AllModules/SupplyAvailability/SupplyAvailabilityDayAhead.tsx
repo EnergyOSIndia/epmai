@@ -8,7 +8,7 @@ import { CategoryTable, TableCard, TechnologyTable } from "@/components/weeksupp
 import { currentBlock, fromApiDay, isIsoDate, isoOf, parseIso, todayIso } from "@/components/weeksupply/weekSupplyData";
 // import { mockDay } from "@/components/weeksupply/weekSupplyData";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchDayPlantSupply } from "@/store/slice/supplyApiSlice";
+import { AVG_SUPPLY_ID, fetchDayAvgSupply, fetchDayPlantSupply } from "@/store/slice/supplyApiSlice";
 
 /** DaySupplyPage: one date's supply as chart + table rows — Category and Technology (Variable
  *  Cost and Plants are commented out until their APIs exist) — with a date navigator and a time-block picker for the tables. Category and
@@ -34,7 +34,10 @@ function DaySupplyPage({ mode = "day" }: { mode?: "day" | "intraday" | "realtime
   const setDate = (iso: string) =>
     navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, date: iso }), replace: true });
 
-  useEffect(() => { dispatch(fetchDayPlantSupply({ date })); }, [dispatch, date]);
+  // Day ahead / Intra-day: plant-supply/avg-supply (data_id 102110 / 102100); Real-time: by-category.
+  useEffect(() => {
+    dispatch(mode === "realtime" ? fetchDayPlantSupply({ date }) : fetchDayAvgSupply({ date, data_id: mode === "intraday" ? AVG_SUPPLY_ID.intraday : AVG_SUPPLY_ID.day }));
+  }, [dispatch, date, mode]);
 
   // The current block ticks forward on its own (checked every 30 s); the tables follow the
   // picked block, which starts at the current one.
