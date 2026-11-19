@@ -1,4 +1,5 @@
 import BASE_URL from "../../BASE_URL";
+import { idbDeletePrefix } from "@/lib/idbCache";
 
 // Token storage (localStorage is the source of truth so it survives reloads and is shared with the
 // authFetch wrapper and the Redux auth slice).
@@ -20,8 +21,11 @@ export function setTokens(access: string | null, refresh: string | null): void {
   } catch { /* storage unavailable (private mode) — tokens live in memory for this session only */ }
 }
 
+/** Sign-out: drops the tokens and the API responses saved in IndexedDB (lib/idbCache), so the next
+ *  person to open the app can't see data loaded under this session. */
 export function clearTokens(): void {
   setTokens(null, null);
+  void idbDeletePrefix("");
 }
 
 /** Pull access + refresh tokens out of a login/verify/refresh response, which the API types only as a

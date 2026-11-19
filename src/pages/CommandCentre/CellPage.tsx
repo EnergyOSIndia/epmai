@@ -37,16 +37,17 @@ export function CellPage() {
   // horizon for this horizon — rendered bare (no PageHead/Section/footer), exactly like /horizon.
   if (isDashboard) {
     // The All-modules page: Week / Month ahead keep their grid / calendar here (Day ahead is the same);
-    // Year ahead its average-demand-per-date heatmap and daily distribution.
-    const Page = MODULE_PAGES[mod].horizons[tf].Module;
+    // Year ahead its average-demand-per-date heatmap and daily distribution. Intra-day shows the
+    // Planning-horizon Intra-day Forecast page (the same page as there).
+    const Page = tf === "id" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
     return <Page />;
   }
 
   // Supply Availability → Supply Bifurcation: the All-modules page for this horizon (Day ahead's
   // date page, Week / Month ahead's Graph Type grids, Year ahead's calendar), rendered bare.
-  // Day ahead shows the Planning-horizon Supply page instead (the same page as there).
+  // Day ahead and Intra-day show the Planning-horizon Supply page instead (the same page as there).
   if (mod === "supply" && tab === "bifurcation") {
-    const Page = tf === "da" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
+    const Page = tf === "da" || tf === "id" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
     return <Page />;
   }
 
