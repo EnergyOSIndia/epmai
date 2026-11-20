@@ -9,6 +9,7 @@ import type {
     MarketState,
 } from "../features/marketTypes";
 import BASE_URL from '../../../BASE_URL'
+import { authFetch } from "@/lib/auth";
 import { cachedJson } from "@/lib/idbCache";
 
 const initialState: MarketState = {
@@ -76,7 +77,7 @@ function datesBetween(from: string, to: string): string[] {
 
 async function getMarketGraph(from_date: string, to_date: string): Promise<MarketGraphApiResponse> {
     const query = new URLSearchParams({ from_date, to_date });
-    const res = await fetch(`${BASE_URL}market-graph?${query.toString()}`, {
+    const res = await authFetch(`${BASE_URL}market-graph?${query.toString()}`, {
         headers: { accept: "*/*" },
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
@@ -166,7 +167,7 @@ export const fetchMarketAverage = createAsyncThunk<
     const { value, changed } = await cachedJson(`market-graph-average:${from_date}:${to_date}`, async () => {
         const parts = await Promise.all(MARKETS.map(async (market) => {
             const query = new URLSearchParams({ from_date, to_date, market });
-            const res = await fetch(`${BASE_URL}market-graph/average?${query.toString()}`, { headers: { accept: "*/*" } });
+            const res = await authFetch(`${BASE_URL}market-graph/average?${query.toString()}`, { headers: { accept: "*/*" } });
             if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
             return { market, json: (await res.json()) as AverageApiResponse };
         }));

@@ -18,6 +18,7 @@ import type {
     WeatherMulti,
 } from "../features/tuneupTypes";
 import BASE_URL from '../../../BASE_URL'
+import { authFetch } from "@/lib/auth";
 import { idbGet, idbSet } from "@/lib/idbCache";
 
 // Demand Tuneup API (tuneup/*) — the location_id-based backend that keeps the rule list
@@ -95,9 +96,9 @@ const noReply = (what: string) => (e: unknown): never => {
     throw e;
 };
 const get = <R>(path: string, what: string) =>
-    fetch(`${T}/${path}`, { headers: { accept: "application/json" } }).catch(noReply(what)).then((r) => json<R>(r, what));
+    authFetch(`${T}/${path}`, { headers: { accept: "application/json" } }).catch(noReply(what)).then((r) => json<R>(r, what));
 const send = <R>(method: "POST" | "PUT" | "DELETE", path: string, what: string, body?: unknown) =>
-    fetch(`${T}/${path}`, { method, headers: body === undefined ? { accept: "application/json" } : JSON_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) })
+    authFetch(`${T}/${path}`, { method, headers: body === undefined ? { accept: "application/json" } : JSON_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) })
         .catch(noReply(what)).then((r) => json<R>(r, what));
 const ruleQS = ({ location_id, date, horizon }: RuleScope) => `location_id=${location_id}&date=${encodeURIComponent(date)}&horizon=${horizon}`;
 

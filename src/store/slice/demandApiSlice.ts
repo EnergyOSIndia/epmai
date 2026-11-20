@@ -17,6 +17,7 @@ import type {
     WeatherBlocks,
 } from "../features/demandTypes";
 import BASE_URL from '../../../BASE_URL'
+import { authFetch } from "@/lib/auth";
 import { cachedJson } from "@/lib/idbCache";
 
 const initialState: DemandState = {
@@ -109,7 +110,7 @@ export const fetchDemandForecast = createAsyncThunk<
         table: params?.table ?? "daily",
     });
 
-    const res = await fetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
+    const res = await authFetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
         headers: { accept: "*/*" },
     });
 
@@ -132,7 +133,7 @@ export const fetchWeekDemandForecast = createAsyncThunk<
         table: params?.table ?? "daily",
     });
 
-    const res = await fetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
+    const res = await authFetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
         headers: { accept: "*/*" },
     });
 
@@ -155,7 +156,7 @@ export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string; data
             location_id: "10030",
             forecasted_by: "System",
         });
-        const res = await fetch(`${BASE_URL}day_ahead?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}day_ahead?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
 
@@ -174,7 +175,7 @@ export const fetchDayAhead = createAsyncThunk<DayAheadData, { date: string; data
                 location_id: "10030",
                 forcasted_by: "Manual",
             });
-            const manualRes = await fetch(`${BASE_URL}demand-forcast/?${manualQuery.toString()}`, {
+            const manualRes = await authFetch(`${BASE_URL}demand-forcast/?${manualQuery.toString()}`, {
                 headers: { accept: "*/*" },
             });
             if (manualRes.ok) {
@@ -242,7 +243,7 @@ async function loadDayAheadRange(
     // Cache-first (IndexedDB, see lib/idbCache.ts): the saved response is used when there is one;
     // `sync` calls the API and saves it if it differs. A 404 (nothing saved) is cached as null.
     const { value: json, changed } = await cachedJson<DayAheadApiResponse | null>(`day-ahead:${query.toString()}`, async () => {
-        const res = await fetch(`${BASE_URL}day_ahead?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}day_ahead?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (res.status === 404) return null;
@@ -281,7 +282,7 @@ export const fetchMeanDemandForecast = createAsyncThunk<MeanDemandData, { data_i
         // Intra-day (102100): no mean-demand-forecast; the day_ahead API has it (System and Manual).
         if (data_id === 102100) return loadIntradayForecast(from_date, to_date);
         const query = new URLSearchParams({ data_id: String(data_id), location_id: "10030", from_date, to_date });
-        const res = await fetch(`${BASE_URL}mean-demand-forecast?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}mean-demand-forecast?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         const empty: MeanDemandData = { dataId: data_id, from: from_date, to: to_date, period: "", status: "not_found", system: null, manual: null };
@@ -323,7 +324,7 @@ async function loadIntradayForecast(from_date: string, to_date: string): Promise
     type Day = DayAheadApiResponse["days"][number] & { actuals_till_block?: number };
     const get = async (by: "System" | "Manual"): Promise<Day | null> => {
         const query = new URLSearchParams({ data_id: "102100", from_date, to_date, location_id: "10030", forecasted_by: by });
-        const res = await fetch(`${BASE_URL}day_ahead?${query.toString()}`, { headers: { accept: "*/*" } });
+        const res = await authFetch(`${BASE_URL}day_ahead?${query.toString()}`, { headers: { accept: "*/*" } });
         if (res.status === 404) return null;
         if (!res.ok) throw new Error(`Failed to fetch intra-day forecast: ${res.statusText}`);
         const json = (await res.json()) as DayAheadApiResponse & { status?: string };
@@ -371,7 +372,7 @@ export const fetchYearDemandForecast = createAsyncThunk<
     });
 
     const { value: rows, changed } = await cachedJson(`year:${query.toString()}`, async () => {
-        const res = await fetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch year forecast: ${res.statusText}`);
@@ -397,7 +398,7 @@ export const fetchYearDayDemand = createAsyncThunk<
     });
 
     const { value: rows } = await cachedJson(`year-day:${query.toString()}`, async () => {
-        const res = await fetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch day forecast: ${res.statusText}`);
@@ -415,7 +416,7 @@ export const fetchSeasons = createAsyncThunk<
 >("demand/fetchSeasons", async ({ start_date, end_date, sync }) => {
     const query = new URLSearchParams({ start_date, end_date });
     const { value: seasons, changed } = await cachedJson(`season-by-date:${query.toString()}`, async () => {
-        const res = await fetch(`${BASE_URL}period/season-by-date?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}period/season-by-date?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch seasons: ${res.statusText}`);
@@ -432,7 +433,7 @@ export const fetchWeather = createAsyncThunk<
 >("demand/fetchWeather", async ({ date, client_id, location_id }) => {
     const query = new URLSearchParams({ date, client_id });
     if (location_id) query.set("location_id", location_id);
-    const res = await fetch(`${BASE_URL}weather/multi?${query.toString()}`, {
+    const res = await authFetch(`${BASE_URL}weather/multi?${query.toString()}`, {
         headers: { accept: "*/*" },
     });
 
@@ -451,7 +452,7 @@ export const fetchWeatherAverage = createAsyncThunk<
     { from_date: string; to_date: string; client_id: string }
 >("demand/fetchWeatherAverage", async ({ from_date, to_date, client_id }) => {
     const query = new URLSearchParams({ from_date, to_date, client_id });
-    const res = await fetch(`${BASE_URL}weather/multi/average?${query.toString()}`, { headers: { accept: "*/*" } });
+    const res = await authFetch(`${BASE_URL}weather/multi/average?${query.toString()}`, { headers: { accept: "*/*" } });
     if (!res.ok) throw new Error(`Failed to fetch average weather: ${res.statusText}`);
     const json = (await res.json()) as { locations?: Record<string, Record<string, Record<string, number | null>>> };
     const locations: Record<string, WeatherBlocks> = {};
@@ -491,7 +492,7 @@ export const fetchLongTermDemandForecast = createAsyncThunk<
     const { value: rows, changed } = await cachedJson(key, async () => {
         const parts = await Promise.all(chunks.map(async ({ from_date, to_date }) => {
             const query = new URLSearchParams({ ...base, from_date, to_date });
-            const res = await fetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
+            const res = await authFetch(`${BASE_URL}demand-forcast/?${query.toString()}`, {
                 headers: { accept: "*/*" },
             });
             if (!res.ok) throw new Error(`Failed to fetch long-term forecast: ${res.statusText}`);
@@ -512,7 +513,7 @@ export const fetchLongTermSeasons = createAsyncThunk<
     async ({ years, sync }) => {
         const { value: seasons, changed } = await cachedJson(`longterm-seasons:${years.join(",")}`, async () => {
             const all = await Promise.all(years.map(async (year) => {
-                const res = await fetch(`${BASE_URL}period/seasons?${new URLSearchParams({ year: String(year) }).toString()}`, {
+                const res = await authFetch(`${BASE_URL}period/seasons?${new URLSearchParams({ year: String(year) }).toString()}`, {
                     headers: { accept: "*/*" },
                 });
                 if (!res.ok) throw new Error(`Failed to fetch seasons for ${year}: ${res.statusText}`);

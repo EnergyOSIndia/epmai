@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import type { AvgSupply, AvgSupplyApiResponse, PlantSupplyApiResponse, SupplyDay, SupplyDayDetail, SupplyGraph, SupplyState } from "../features/supplyTypes";
 import BASE_URL from '../../../BASE_URL'
+import { authFetch } from "@/lib/auth";
 import { cachedJson } from "@/lib/idbCache";
 
 const initialState: SupplyState = {
@@ -68,7 +69,7 @@ type RangeResult = { graph: SupplyGraph; from: string; to: string; days: (Supply
 async function loadRange({ from_date, to_date, graph, sync }: RangeArgs): Promise<RangeResult> {
     const query = new URLSearchParams({ from_date, to_date, graph });
     const { value: json, changed } = await cachedJson(`plant-supply:${query.toString()}`, async () => {
-        const res = await fetch(`${BASE_URL}plant-supply/by-category?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}plant-supply/by-category?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch plant supply: ${res.statusText}`);
@@ -129,7 +130,7 @@ export const fetchDayPlantSupply = createAsyncThunk<{ date: string; detail: Supp
     "supply/fetchDayPlantSupply",
     async ({ date }) => {
         const query = new URLSearchParams({ from_date: date, to_date: date });
-        const res = await fetch(`${BASE_URL}plant-supply/by-category?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}plant-supply/by-category?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch plant supply: ${res.statusText}`);
@@ -175,7 +176,7 @@ export const fetchPeriodPlantSupply = createAsyncThunk<
 >("supply/fetchPeriodPlantSupply", async ({ from_date, to_date, sync }) => {
     const { value, changed } = await cachedJson(`plant-supply-avg:${from_date}:${to_date}`, async () => {
         const query = new URLSearchParams({ from_date, to_date });
-        const res = await fetch(`${BASE_URL}plant-supply/by-category?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}plant-supply/by-category?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch plant supply: ${res.statusText}`);
@@ -193,7 +194,7 @@ export const fetchAvgSupply = createAsyncThunk<AvgSupply, { from_date: string; t
     "supply/fetchAvgSupply",
     async ({ from_date, to_date, group_by }) => {
         const query = new URLSearchParams({ from_date, to_date, group_by, include_blocks: "true" });
-        const res = await fetch(`${BASE_URL}plant-supply/avg-supply?${query.toString()}`, {
+        const res = await authFetch(`${BASE_URL}plant-supply/avg-supply?${query.toString()}`, {
             headers: { accept: "*/*" },
         });
         if (!res.ok) throw new Error(`Failed to fetch average supply: ${res.statusText}`);
@@ -223,7 +224,7 @@ export const AVG_SUPPLY_ID = { intraday: 102100, day: 102110, week: 102120, mont
 async function loadAvgSupply(data_id: number, from_date: string, to_date: string, label: string): Promise<{ days: number; detail: SupplyDayDetail | null }> {
     const load = async (group_by: "category" | "technology") => {
         const query = new URLSearchParams({ data_id: String(data_id), from_date, to_date, group_by, include_blocks: "true" });
-        const res = await fetch(`${BASE_URL}plant-supply/avg-supply?${query.toString()}`, { headers: { accept: "*/*" } });
+        const res = await authFetch(`${BASE_URL}plant-supply/avg-supply?${query.toString()}`, { headers: { accept: "*/*" } });
         if (!res.ok) {
             let detail = res.statusText;
             try { const b = await res.json(); detail = b?.detail?.message ?? detail; } catch { /* keep statusText */ }
