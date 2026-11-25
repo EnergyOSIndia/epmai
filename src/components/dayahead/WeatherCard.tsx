@@ -76,18 +76,22 @@ function WindTick({ x = 0, y = 0, index = 0, data }: { x?: number; y?: number; i
 
 /** Card B: weather for the chosen location from the weather API — summary + hourly chart.
  *  The location select is local to this card; every location comes back in one call per date. */
-export function WeatherCard({ weather, date, location, onLocation }: {
+export function WeatherCard({ weather, date, location, onLocation, label, emptyText = "No weather data for this date." }: {
   weather: Weather; date: string; location: string; onLocation: (id: string) => void;
+  /** Name of a location id (default: the city name). The Zone-wise page passes zone names. */
+  label?: (id: string) => string;
+  /** Shown when there is no weather for the location (the Zone-wise page: "No data available"). */
+  emptyText?: string;
 }) {
   const day = weather.days[location];
   const ids = weather.locations.includes(location) ? weather.locations : [location, ...weather.locations];
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="text-[13px] font-bold">{cityOf(location)} Weather</div>
+        <div className="text-[13px] font-bold">{label ? label(location) : cityOf(location)} Weather</div>
         <select aria-label="Weather location" value={location} onChange={(e) => onLocation(e.target.value)}
           className="h-7 rounded-md border bg-card px-2 text-[12px] font-medium">
-          {ids.map((id) => <option key={id} value={id}>{cityOf(id) === id ? id : `${cityOf(id)} (${id})`}</option>)}
+          {ids.map((id) => <option key={id} value={id}>{label ? label(id) : cityOf(id) === id ? id : `${cityOf(id)} (${id})`}</option>)}
         </select>
       </div>
       {weather.loading ? (
@@ -95,7 +99,7 @@ export function WeatherCard({ weather, date, location, onLocation }: {
       ) : weather.error ? (
         <div className="grid flex-1 place-items-center text-[12px] text-destructive">{weather.error}</div>
       ) : !day ? (
-        <div className="grid flex-1 place-items-center text-[12px] text-muted-foreground">No weather data for this date.</div>
+        <div className="grid flex-1 place-items-center text-[12px] text-muted-foreground">{emptyText}</div>
       ) : (
         <WeatherBody day={day} date={date} />
       )}

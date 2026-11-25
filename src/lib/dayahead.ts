@@ -107,7 +107,7 @@ export type WeatherDay = { hours: WeatherHour[]; temps: number[] };
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
 /** 96 API blocks → 24 hourly averages (labelled 00:30 … 23:30). Null if temperature is missing. */
-function toDay(w: WeatherBlocks): WeatherDay | null {
+export function toWeatherDay(w: WeatherBlocks): WeatherDay | null {
   const arr = (f: keyof WeatherBlocks) => Array.from({ length: BLOCKS }, (_, b) => Number(w[f]?.[String(b + 1)]));
   const temps = arr("temperature");
   if (temps.some((v) => Number.isNaN(v))) return null;
@@ -137,7 +137,7 @@ export function useWeather(date: string): Weather {
   }, [dispatch, date]);
   const days = useMemo(() => {
     const out: Record<string, WeatherDay> = {};
-    if (weather?.date === date) Object.entries(weather.locations).forEach(([id, w]) => { const d = toDay(w); if (d) out[id] = d; });
+    if (weather?.date === date) Object.entries(weather.locations).forEach(([id, w]) => { const d = toWeatherDay(w); if (d) out[id] = d; });
     return out;
   }, [weather, date]);
   return { locations: Object.keys(days), days, loading: weatherLoading, error: weatherError };
@@ -169,7 +169,7 @@ export function useWeatherAverage(from: string, to: string, active: boolean): We
   const ready = state?.key === key;
   const days = useMemo(() => {
     const out: Record<string, WeatherDay> = {};
-    if (ready && state?.locations) Object.entries(state.locations).forEach(([id, w]) => { const d = toDay(w); if (d) out[id] = d; });
+    if (ready && state?.locations) Object.entries(state.locations).forEach(([id, w]) => { const d = toWeatherDay(w); if (d) out[id] = d; });
     return out;
   }, [ready, state]);
   return { locations: Object.keys(days), days, loading: active && !ready, error: ready ? state!.error : null };
