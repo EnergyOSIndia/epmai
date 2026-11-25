@@ -16,6 +16,7 @@ import { NotFoundPage } from "@/pages/NotFound/NotFoundPage";
 import { ReportLibrary } from "@/components/ReportLibrary";
 import { MODULE_PAGES } from "@/pages/AllModules";
 import { MarketOverviewChart, isMiTf } from "@/components/marketdetail/MarketOverviewChart";
+import { ZoneDemandForecast, type ZoneKind } from "@/components/dayahead/ZoneDemandForecast";
 import { OptMethodSelector } from "@/components/OptMethodSelector";
 import { useOptimization } from "@/hooks/useOptimization";
 import { PlantDCvsSG } from "@/components/PlantDCvsSG";
@@ -46,6 +47,11 @@ export function CellPage() {
     const Page = tf === "id" ? MODULE_PAGES[mod].horizons[tf].Plan : MODULE_PAGES[mod].horizons[tf].Module;
     return <Page />;
   }
+
+  // Demand → Zone-wise demand at Intra-day / Day / Week / Month ahead: the Demand Forecast layout for
+  // the three zones (EZ, WZ, CZ) on one chart, with zone weather — rendered bare, full window.
+  const ZONE_KIND: Partial<Record<string, ZoneKind>> = { id: "intraday", da: "day", wk: "week", mo: "month" };
+  if (mod === "demand" && tab === "zone" && ZONE_KIND[tf]) return <ZoneDemandForecast key={tf} kind={ZONE_KIND[tf]!} />;
 
   // Supply Availability → Supply Bifurcation: the All-modules page for this horizon (Day ahead's
   // date page, Week / Month ahead's Graph Type grids, Year ahead's calendar), rendered bare.
@@ -193,7 +199,9 @@ function OptApiPanel({ subId, tf = "da" }: { subId: string; tf?: TfId }) {
             <div key={i} className="h-4 w-4 rounded-sm" style={{ background: p.scheduled_mw > 1 ? "hsl(var(--primary))" : "hsl(var(--muted))" }} title={p.name} />
           ))}
         </div>
-        <table className="w-full text-sm">
+        {/* Graphs first (each plant's DC vs optimized SG), then the dispatch table. */}
+        <PlantDCvsSG tf={tf} />
+        <table className="mt-4 w-full text-sm">
           <thead><tr className="border-b text-xs text-muted-foreground">
             <th className="px-2 py-2 text-left">Plant</th>
             <th className="px-2 py-2 text-right">VC ₹/MWh</th>
@@ -214,7 +222,6 @@ function OptApiPanel({ subId, tf = "da" }: { subId: string; tf?: TfId }) {
           ))}</tbody>
         </table>
         {api.saving_rs > 0 && <div className="mt-3 text-sm font-semibold text-ok">Saving: ₹{api.saving_lakh.toLocaleString("en-IN", { maximumFractionDigits: 2 })} Lakh</div>}
-        <PlantDCvsSG tf={tf} />
       </div>
     );
   }
