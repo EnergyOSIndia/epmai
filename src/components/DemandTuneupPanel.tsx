@@ -416,13 +416,26 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
+  // The chart box's height, measured: Highcharts sizes itself once when drawn, so a box that later
+  // shrinks to fit the window cut the bottom of the chart (lowest blocks, time labels, legend) off.
+  const chartBoxRef = useRef<HTMLDivElement>(null);
+  const [chartH, setChartH] = useState(0);
+  useEffect(() => {
+    const el = chartBoxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setChartH(Math.floor(e.contentRect.height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // 96-block chart (Highcharts): System and Manual Forecast, plus the dashed Preview of a Change.
   const chartOptions = useMemo<ChartOptions>(() => {
     const AX = { color: "#64748b", fontSize: "10px" };
     return {
       chart: {
         type: "spline", animation: false, backgroundColor: "transparent", plotBackgroundColor: "rgba(15, 118, 110, 0.05)",
-        spacing: [10, 4, 4, 0], style: { fontFamily: "inherit" },
+        ...(chartH > 0 ? { height: chartH } : {}),
+        spacing: [10, 4, 2, 0], style: { fontFamily: "inherit" },
       },
       title: { text: undefined },
       credits: { enabled: false },
@@ -441,7 +454,12 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
         title: { text: undefined }, min: yDomain[0], max: yDomain[1], startOnTick: false, endOnTick: false,
         gridLineColor: "#e5e7eb", labels: { style: AX },
       },
-      legend: { symbolWidth: 18, itemStyle: { fontSize: "12px", fontWeight: "500", color: "#475569" }, itemHoverStyle: { color: "#0f172a" } },
+      // Legend pinned to the card's bottom edge with no gap above it (Highcharts' default margin and
+      // padding left an empty band under the time labels), so the plot gets that height.
+      legend: {
+        verticalAlign: "bottom", margin: 0, padding: 2, itemMarginTop: 0, itemMarginBottom: 0, symbolWidth: 18,
+        itemStyle: { fontSize: "12px", fontWeight: "500", color: "#475569" }, itemHoverStyle: { color: "#0f172a" },
+      },
       tooltip: {
         shared: true, useHTML: true, animation: false, hideDelay: 0,
         backgroundColor: "#ffffff", borderColor: "#e5e7eb", borderRadius: 8, padding: 10,
@@ -473,7 +491,7 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
         ...(modified ? [{ type: "spline" as const, name: "Preview (unsaved)", color: MOD_COLOR, lineWidth: 2, dashStyle: "Dash" as const, data: rows.map((r) => r.modified) }] : []),
       ],
     };
-  }, [rows, yDomain, modified, appliedDate]);
+  }, [rows, yDomain, modified, appliedDate, chartH]);
 
   const noticeEl = notice && (
     <div className={"mt-3 rounded-md border px-3 py-2 text-[13px] font-medium " + (notice.kind === "ok" ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300" : "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300")}>
@@ -499,7 +517,7 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
             <span title="System Forecast, saved Manual Forecast and the dashed preview of a Change" className="grid h-6 w-6 place-items-center rounded-full border"><Info className="h-3 w-3" /></span>
           </div>
         </div>
-        <div className="relative min-h-0 flex-1">
+        <div ref={chartBoxRef} className="relative min-h-0 flex-1 overflow-hidden">
           {(loading || (!forecast && !config && !error)) && <div className="absolute inset-0 z-10 grid place-items-center bg-card/60 text-sm text-muted-foreground"><span className="inline-flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</span></div>}
           {error && !loading && <div className="absolute inset-0 z-10 grid place-items-center px-6 text-center text-sm text-rose-600">{error}</div>}
           {!error && !loading && (config || forecast) && !forecast && <div className="absolute inset-0 z-10 grid place-items-center text-sm text-muted-foreground">No forecast for this date.</div>}

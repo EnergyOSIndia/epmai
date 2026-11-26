@@ -24,6 +24,7 @@ import { ForecastDateControl } from "./ForecastDateControl";
 import { KpiCard } from "./KpiCard";
 import { PeriodBreakdown } from "./PeriodBreakdown";
 import { WeatherCard } from "./WeatherCard";
+import { ZONES, useZoneLine, useZoneWeather, type ZoneId } from "@/lib/zoneDemand";
 
 const n2 = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const card = "min-h-0 rounded-xl border bg-card p-3";
@@ -58,6 +59,11 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   });
   const [year, setYear] = useState(() => istNow().getFullYear());
   const [location, setLocation] = useState("BH_AL");
+  // Region (Intra-day / Day / Week / Month ahead): Madhya Pradesh (the state, as before) or one zone.
+  // Always opens on Madhya Pradesh.
+  const regionOn = kind === "intraday" || kind === "day" || kind === "week" || kind === "month";
+  const [region, setRegion] = useState<"mp" | ZoneId>("mp");
+  const zone: ZoneId | null = regionOn && region !== "mp" ? region : null;
   // Real-time: the current block, kept up to date (checked every 30 s).
   const [nowB, setNowB] = useState(currentBlock);
   useEffect(() => {
@@ -120,11 +126,16 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
 
   const dataId = DATA_ID[kind];
   useEffect(() => { dispatch(fetchMeanDemandForecast({ data_id: dataId, from_date: fromIso, to_date: toIso })); }, [dispatch, dataId, fromIso, toIso]);
-  const ready = !meanLoading && mean?.dataId === dataId && mean.from === fromIso && mean.to === toIso;
-  const data = ready ? mean : null;
+  const stateReady = !meanLoading && mean?.dataId === dataId && mean.from === fromIso && mean.to === toIso;
+  const data = stateReady ? mean : null;
+  // A zone: zone-demand/data (Intra-day, Day ahead) or zone-demand/average (Week, Month) instead.
+  const zl = useZoneLine(zone, dataId, fromIso, toIso);
+  const ready = zone ? !zl.loading : stateReady;
+  const loadError = zone ? zl.error : meanError;
 
   // The API's lines: System is the forecast; Manual joins it on the chart once actuals exist.
-  const sys = data?.system ?? null, man = data?.manual ?? null;
+  // A zone has one line (no Manual, no Roastering).
+  const sys = zone ? zl.line : data?.system ?? null, man = zone ? null : data?.manual ?? null;
   const forecast = sys?.forecast ?? man?.forecast ?? null;
   const base = sys ?? man;
   const actuals = useMemo(() => (forecast && base ? buildActuals(forecast, { actual: base.actual, mape: base.mape, roastering: base.roastering, udm: base.udm, manual: sys && man ? man.forecast : null }) : null), [forecast, base, sys, man]);
@@ -151,8 +162,25 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   const dayWeather = useWeather(wxDate);
   const avgWeather = useWeatherAverage(fromIso, toIso, kind === "week" || kind === "month");
   const periodWx = (kind === "week" || kind === "month") && (avgWeather.loading || avgWeather.locations.length > 0);
-  const weather = periodWx ? avgWeather : dayWeather;
-  const wxDay = weather.days[location];
+  const zwx = useZoneWeather(zone, dataId, fromIso, toIso);
+  const zoneWeather = useMemo(() => ({
+    locations: zone ? [zone] : [], days: zone && zwx.day ? { [zone]: zwx.day } : {}, loading: zwx.loading, error: null,
+  }), [zone, zwx.day, zwx.loading]);
+  const weather = zone ? zoneWeather : periodWx ? avgWeather : dayWeather;
+  const wxDay = zone ? zwx.day : weather.days[location];
+  const zoneName = (id: string) => { const z = ZONES.find((x) => x.id === id); return z ? `${z.name} (${z.code})` : id; };
+
+  // Region picker card in the KPI row.
+  const regionCard = regionOn ? (
+    <KpiCard title="Region" className="bg-muted/60">
+      <select aria-label="Region" value={region} onChange={(e) => setRegion(e.target.value as "mp" | ZoneId)}
+        className="mt-1.5 h-7 w-full rounded-md border bg-card px-2 text-[12px] font-semibold">
+        <option value="mp">Madhya Pradesh</option>
+        {ZONES.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+      </select>
+    </KpiCard>
+  ) : null;
+  const kpiGrid = cn("grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3", regionOn ? "xl:grid-cols-7" : "xl:grid-cols-6");
 
   // Fill the viewport below the page's own top edge, so nothing scrolls.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -167,16 +195,18 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   const name = NAME[kind];
   const title = kind === "intraday" || kind === "realtime"
     ? `96-Block ${name} Forecast` + (kind === "realtime" ? ` · till ${blockTime(nowB)}` : "")
-    : `96-Block ${name}-Ahead Forecast` + (kind !== "day" && data?.period ? ` · ${data.period}` : "");
+    : `96-Block ${name}-Ahead Forecast` + (!zone && kind !== "day" && data?.period ? ` · ${data.period}` : "");
+  const shownTitle = zone ? `${title} · ${zoneName(zone)}` : title;
   const mapeNote = base?.periodMape != null ? ` · MAPE ${base.periodMape.toFixed(2)}%` : "";
 
   let body: ReactNode;
-  if (!ready && !meanError) {
+  if (!ready && !loadError) {
     const blk = "animate-pulse rounded-xl bg-muted";
     body = (
       <>
-        <div className="grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+        <div className={kpiGrid}>
           {Array.from({ length: 5 }, (_, i) => <div key={i} className={cn(blk, "h-[74px]")} />)}
+          {regionCard}
           {control}
         </div>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-12">
@@ -188,14 +218,15 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   } else if (!forecast || !k || !periods) {
     body = (
       <>
-        <div className="grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+        <div className={kpiGrid}>
           {["Total energy", "Peak demand", "Min demand", "Average demand", "Temp range"].map((t) => <KpiCard key={t} title={t} value={null} />)}
+          {regionCard}
           {control}
         </div>
         <div className="grid min-h-0 flex-1 place-items-center rounded-xl border bg-card p-6">
           <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
             <CalendarDays className="h-10 w-10" />
-            <p className="text-[13px]">{meanError ?? `No ${dayLike ? "day-ahead" : name.toLowerCase() + "-ahead"} forecast is saved for this ${dayLike ? "date" : kind}.`}</p>
+            <p className="text-[13px]">{loadError ?? `No ${zone ? zoneName(zone) + " " : ""}${dayLike ? "day-ahead" : name.toLowerCase() + "-ahead"} forecast is saved for this ${dayLike ? "date" : kind}.`}</p>
           </div>
         </div>
       </>
@@ -203,22 +234,28 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   } else {
     body = (
       <>
-        <div className="grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+        <div className={kpiGrid}>
           <KpiCard title="Total energy" strip={cv("--c-isgs")} value={n2(k.total) + " MWh"} caption={`${upTo == null ? 96 : upTo + 1} blocks summed` + mapeNote} />
           <KpiCard title="Peak demand" strip={cv("--neg")} value={n2(k.peak) + " MW"} caption={`Block ${k.peakB + 1} • ${blockTime(k.peakB)}`} />
           <KpiCard title="Min demand" strip={cv("--demand")} value={k.min.toFixed(2) + " MW"} caption="Lowest 15-min block" />
           <KpiCard title="Average demand" strip={cv("--c-ipp")} value={k.avg.toFixed(2) + " MW"} caption="Mean 15-min block" />
-          <KpiCard title="Temp range" strip={cv("--c-hydro")} value={wxDay ? `${Math.min(...wxDay.temps).toFixed(1)}°—${Math.max(...wxDay.temps).toFixed(1)}°C` : null} caption="weather forecast" />
+          <KpiCard title="Temp range" strip={cv("--c-hydro")} value={wxDay ? `${Math.min(...wxDay.temps).toFixed(1)}°—${Math.max(...wxDay.temps).toFixed(1)}°C` : null} caption={zone ? `${ZONES.find((z) => z.id === zone)?.code} weather` : "weather forecast"} />
+          {regionCard}
           {control}
         </div>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-12">
           <div className="flex min-h-0 flex-col gap-2.5 lg:col-span-8">
             <div className={cn(card, "flex-1")}>
-              <ForecastChart forecast={forecast} actuals={actuals} date={dayLike ? fromIso : kind} title={title} upTo={upTo} />
+              <ForecastChart forecast={forecast} actuals={actuals} date={dayLike ? fromIso : kind} title={shownTitle} upTo={upTo} noRoast={!!zone} />
             </div>
             <div className={cn(card, "flex-1")}>
               {/* An average day isn't "today": it shows its peak, with no "now" marker. */}
-              <WeatherCard weather={weather} date={periodWx ? `avg:${fromIso}` : wxDate} location={location} onLocation={setLocation} />
+              {zone ? (
+                // A zone: its own weather (weather/zone), no city list.
+                <WeatherCard weather={weather} date={dayLike ? wxDate : `avg:${fromIso}`} location={zone} onLocation={() => {}} label={zoneName} emptyText="No data available" />
+              ) : (
+                <WeatherCard weather={weather} date={periodWx ? `avg:${fromIso}` : wxDate} location={location} onLocation={setLocation} />
+              )}
             </div>
           </div>
           <div className={cn(card, "flex flex-col gap-3 lg:col-span-4")}>
