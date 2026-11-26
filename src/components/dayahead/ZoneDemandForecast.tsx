@@ -76,11 +76,11 @@ export function ZoneDemandForecast({ kind }: { kind: ZoneKind }) {
   const dataId = DATA_ID[kind];
   const { lines, error, loading } = useZoneDemand(dataId, fromIso, toIso);
 
-  // The three zones added together, block by block (actual where every zone has one, else forecast).
+  // The three zones' forecasts added together, block by block (the page shows the forecast only).
   const total = useMemo(() => {
     if (!lines) return null;
     const vals = Array.from({ length: 96 }, (_, b) => {
-      const v = ZONES.map((z) => lines[z.id].actual[b] ?? lines[z.id].forecast[b]);
+      const v = ZONES.map((z) => lines[z.id].forecast[b]);
       return v.every((x) => x == null) ? null : v.reduce<number>((s, x) => s + (x ?? 0), 0);
     });
     return vals.some((v) => v == null) ? null : (vals as number[]);

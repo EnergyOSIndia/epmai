@@ -105,10 +105,12 @@ function download(name: string, href: string) {
 
 /** Card A: 96-block day-ahead forecast. Actual / UDM (yellow) / Roastering / MAPE only when `actuals` is given
  *  (today or earlier); Manual Forecast + Manual MAPE only when that data exists. */
-export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast", upTo }: {
+export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast", upTo, noRoast = false }: {
   forecast: number[]; actuals: Actuals | null; date: string;
   /** Last block shown (0-based): the chart stops there (Real-time: the current block). All 96 if unset. */
   upTo?: number;
+  /** No Roastering series (a zone's data has none). */
+  noRoast?: boolean;
   /** Title over the full-size chart. */
   title?: string;
   /** Small-card mode (Week ahead grid): no title bar, export menu or legend; smaller axes. */
@@ -152,9 +154,9 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
     ...(actuals?.udm ? [{ key: "udm", label: "UDM (MW)", color: C.udm }] : []),
     { key: "forecast", label: "System Forecast (MW)", color: C.forecast },
     ...(actuals?.manual ? [{ key: "manual", label: "Manual Forecast (MW)", color: C.manual }] : []),
-    ...(actuals ? [{ key: "roast", label: "Roastering", color: C.roast }, { key: "mape", label: "System MAPE %", color: C.mape }] : []),
+    ...(actuals ? [...(noRoast ? [] : [{ key: "roast", label: "Roastering", color: C.roast }]), { key: "mape", label: "System MAPE %", color: C.mape }] : []),
     ...(actuals?.manualMape ? [{ key: "manualMape", label: "Manual MAPE %", color: C.manualMape }] : []),
-  ], [actuals]);
+  ], [actuals, noRoast]);
 
   // Left axis hugs the visible MW series: ~97% of the lowest visible value, rescaling on toggle.
   const [lo, hi] = useMemo(() => {
@@ -163,12 +165,12 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
       if (!hidden.has("forecast")) vals.push(r.forecast);
       if (r.actual != null && !hidden.has("actual")) vals.push(r.actual);
       if (r.udm != null && !hidden.has("udm")) vals.push(r.udm);
-      if (r.roast && !hidden.has("roast")) vals.push(r.roast[1]);
+      if (r.roast && !noRoast && !hidden.has("roast")) vals.push(r.roast[1]);
       if (r.manual != null && !hidden.has("manual")) vals.push(r.manual);
     });
     if (!vals.length) return [0, 1];
     return [Math.floor((Math.min(...vals) * 0.97) / 100) * 100, Math.ceil((Math.max(...vals) * 1.02) / 100) * 100];
-  }, [rows, hidden]);
+  }, [rows, hidden, noRoast]);
 
   // Right axis is 0–9% by default, stretched in steps of 3 when MAPE runs higher.
   const pctMax = Math.max(9, Math.ceil(Math.max(0, ...rows.map((r) => Math.max(r.mape ?? 0, r.manualMape ?? 0))) / 3) * 3);
