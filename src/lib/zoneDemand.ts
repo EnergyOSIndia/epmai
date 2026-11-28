@@ -5,7 +5,10 @@
 //                           (avg_actual_demand, avg_forecast_demand, avg_udm, avg_mape).
 //  · weather/zone         — the zone's weather per day and block (mean of its locations); a week /
 //                           month is averaged block by block here into one day.
-// All behind the login (authFetch). One request per zone / period for the session.
+//  · division-demand/data | /average — the same for one division of a zone (CZ01 …), by location_id;
+//    division-demand/divisions lists a zone's divisions.
+// Zone / division demand APIs take the discom as `discom` (central / east / west); weather/zone
+// still takes `zone`. All behind the login (authFetch). One request per zone / period for the session.
 import { useEffect, useState } from "react";
 import BASE_URL from "../../BASE_URL";
 import { authFetch, readApiError } from "@/lib/auth";
@@ -31,27 +34,53 @@ async function getJson(path: string, q: Record<string, string>): Promise<Record<
   return res.json();
 }
 
-type DataBlock = { block: number; Actual_demand?: number | null; Forecasted_demand?: number | null; udm?: number | null; mape?: number | null };
-type AvgBlock = { block: number; avg_actual_demand?: number | null; avg_forecast_demand?: number | null; avg_udm?: number | null; avg_mape?: number | null };
+/** Which forecast rows the zone / division APIs return: System (their default) or the saved Manual. */
+export type ForecastedBy = "System" | "Manual";
 
-/** zone-demand/data (one date) or zone-demand/average (week / month) → the zone's line. */
-async function loadZoneLine(zone: ZoneId, dataId: number, from: string, to: string): Promise<ZoneLine> {
-  const q = { zone, data_id: String(dataId), from_date: from, to_date: to };
+// With forecasted_by=Manual the APIs return both forecasts per block: System as Forecasted_demand /
+// avg_forecast_demand, the Manual as Forecasted_Manual_demand / avg_manual_forecast_demand, each with
+// its own MAPE (System_mape / Manual_mape, avg_system_mape / avg_manual_mape, summary system_mape /
+// manual_mape). Without it (System) the MAPE is plain mape / avg_mape / summary.mape.
+type DataBlock = {
+  block: number; Actual_demand?: number | null; Forecasted_demand?: number | null; Forecasted_Manual_demand?: number | null;
+  udm?: number | null; mape?: number | null; System_mape?: number | null; Manual_mape?: number | null;
+};
+type AvgBlock = {
+  block: number; avg_actual_demand?: number | null; avg_forecast_demand?: number | null; avg_manual_forecast_demand?: number | null;
+  avg_udm?: number | null; avg_mape?: number | null; avg_system_mape?: number | null; avg_manual_mape?: number | null;
+};
+type Summary = { mape?: number | null; system_mape?: number | null; manual_mape?: number | null };
+
+/** zone-demand/data (one date) or zone-demand/average (week / month) → the zone's line; with a
+ *  `division` (its location_id) the same from division-demand/data | /average. */
+async function loadZoneLine(zone: ZoneId, dataId: number, from: string, to: string, division?: number | null, by: ForecastedBy = "System"): Promise<ZoneLine> {
+  const q: Record<string, string> = division
+    ? { state: "MP", discom: zone, location_id: String(division), data_id: String(dataId), from_date: from, to_date: to, forecasted_by: by }
+    : { discom: zone, data_id: String(dataId), from_date: from, to_date: to, forecasted_by: by };
+  const base = division ? "division-demand" : "zone-demand";
   const line: ZoneLine = { actual: emptyCol(), forecast: emptyCol(), udm: emptyCol(), mape: emptyCol(), periodMape: null };
   const put = (b: number, a: unknown, f: unknown, u: unknown, m: unknown) => {
     if (b < 1 || b > BLOCKS) return;
     line.actual[b - 1] = num(a); line.forecast[b - 1] = num(f); line.udm[b - 1] = num(u); line.mape[b - 1] = num(m);
   };
+  const manual = by === "Manual";
+  const periodMape = (sm: Summary | undefined) => num(manual ? sm?.manual_mape : sm?.mape ?? sm?.system_mape);
   if (dataId === 102100 || dataId === 102110) {
-    const json = await getJson("zone-demand/data", q);
-    line.periodMape = num((json.summary as { mape?: number } | undefined)?.mape);
+    const json = await getJson(`${base}/data`, q);
+    line.periodMape = periodMape(json.summary as Summary | undefined);
     const days = (json.data as { date: string; blocks?: DataBlock[] }[] | undefined) ?? [];
     const day = days.find((d) => d.date === from) ?? days[0];
-    for (const b of day?.blocks ?? []) put(b.block, b.Actual_demand, b.Forecasted_demand, b.udm, b.mape);
+    for (const b of day?.blocks ?? []) {
+      put(b.block, b.Actual_demand, manual ? b.Forecasted_Manual_demand : b.Forecasted_demand, b.udm,
+        manual ? b.Manual_mape : b.mape ?? b.System_mape);
+    }
   } else {
-    const json = await getJson("zone-demand/average", q);
-    line.periodMape = num((json.summary as { mape?: number } | undefined)?.mape);
-    for (const b of (json.blocks as AvgBlock[] | undefined) ?? []) put(b.block, b.avg_actual_demand, b.avg_forecast_demand, b.avg_udm, b.avg_mape);
+    const json = await getJson(`${base}/average`, q);
+    line.periodMape = periodMape(json.summary as Summary | undefined);
+    for (const b of (json.blocks as AvgBlock[] | undefined) ?? []) {
+      put(b.block, b.avg_actual_demand, manual ? b.avg_manual_forecast_demand : b.avg_forecast_demand, b.avg_udm,
+        manual ? b.avg_manual_mape : b.avg_mape ?? b.avg_system_mape);
+    }
   }
   return line;
 }
@@ -156,19 +185,45 @@ export function toForecastLine(l: ZoneLine): MeanForecastLine | null {
   };
 }
 
-/** One zone's line for a period (nothing loaded while `zone` is null). */
-export function useZoneLine(zone: ZoneId | null, dataId: number, from: string, to: string) {
-  const key = zone ? `${zone}:${dataId}:${from}:${to}` : "";
+/** One zone's line for a period — or one of its divisions' when `division` (location_id) is given
+ *  (nothing loaded while `zone` is null). */
+export function useZoneLine(zone: ZoneId | null, dataId: number, from: string, to: string, division?: number | null, by: ForecastedBy = "System", refresh = 0) {
+  const key = zone ? `${zone}${division ? "/" + division : ""}${by === "Manual" ? "#manual" : ""}:${dataId}:${from}:${to}` : "";
   const tick = useLiveTick(to);
-  const [state, setState] = useState<{ key: string; line: MeanForecastLine | null; error: string | null } | null>(null);
+  const [state, setState] = useState<{ key: string; refresh: number; line: MeanForecastLine | null; error: string | null } | null>(null);
   useEffect(() => {
     if (!zone) return;
     let live = true;
-    cached(lineLoads, key, () => loadZoneLine(zone, dataId, from, to))
-      .then((l) => { if (live) setState({ key, line: toForecastLine(l), error: null }); })
-      .catch((e) => { if (live) setState({ key, line: null, error: e?.message ?? String(e) }); });
+    // A Refresh (`refresh` changed) re-asks the API instead of using the saved answer.
+    if (refresh) lineLoads.delete(key);
+    // The Manual rows are always asked fresh, so a save on the Tune up page shows straight away.
+    (by === "Manual" ? loadZoneLine(zone, dataId, from, to, division, by) : cached(lineLoads, key, () => loadZoneLine(zone, dataId, from, to, division, by)))
+      .then((l) => { if (live) setState({ key, refresh, line: toForecastLine(l), error: null }); })
+      // No Manual saved is not an error: just no Manual line.
+      .catch((e) => { if (live) setState({ key, refresh, line: null, error: by === "Manual" ? null : e?.message ?? String(e) }); });
     return () => { live = false; };
-  }, [key, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, tick, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
   const ready = !!zone && state?.key === key;
-  return { line: ready ? state.line : null, error: ready ? state.error : null, loading: !!zone && !ready };
+  // A Refresh keeps showing the current line (`loading` stays false) and reports `refreshing` until the new one lands.
+  return { line: ready ? state.line : null, error: ready ? state.error : null, loading: !!zone && !ready, refreshing: ready && state.refresh !== refresh };
+}
+
+/** A zone's divisions (division-demand/divisions): location_id + code (CZ01, CZ02, CZ03). */
+export type Division = { location_id: number; division: string };
+const divisionLoads = new Map<ZoneId, Promise<Division[]>>();
+export function useDivisions(zone: ZoneId | null) {
+  const [state, setState] = useState<{ zone: ZoneId; list: Division[] } | null>(null);
+  useEffect(() => {
+    if (!zone) return;
+    if (!divisionLoads.has(zone)) {
+      const p = getJson("division-demand/divisions", { state: "MP", discom: zone })
+        .then((j) => ((j.divisions as Division[] | undefined) ?? []).filter((d) => d && d.location_id));
+      p.catch(() => divisionLoads.delete(zone));
+      divisionLoads.set(zone, p);
+    }
+    let live = true;
+    divisionLoads.get(zone)!.then((list) => { if (live) setState({ zone, list }); }, () => { if (live) setState({ zone, list: [] }); });
+    return () => { live = false; };
+  }, [zone]);
+  return zone && state?.zone === zone ? state.list : [];
 }
