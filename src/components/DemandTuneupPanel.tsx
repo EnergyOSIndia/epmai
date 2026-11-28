@@ -10,11 +10,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Chart, type ChartOptions } from "@highcharts/react";
 import "@highcharts/react/options/Exporting";
 import {
-  ArrowDown, ArrowUp, Info, Loader2, Plus, Redo2, RotateCw, Trash2, Undo2, Zap,
+  ArrowDown, ArrowUp, Info, Loader2, Plus, Redo2, RotateCw, Trash2, Undo2, X, Zap,
 } from "lucide-react";
 import { cityOf, useWeather } from "@/lib/dayahead";
 import { WeatherCard } from "@/components/dayahead/WeatherCard";
 import { ForecastDateControl } from "@/components/dayahead/ForecastDateControl";
+import { KpiCard } from "@/components/dayahead/KpiCard";
+import { ZONES, useDivisions, type ZoneId } from "@/lib/zoneDemand";
 import { MonthNavigator } from "@/components/weeksupply/MonthNavigator";
 import { WeekNavigator } from "@/components/weeksupply/WeekNavigator";
 import { getWeekRange, isoOf, monthStart, parseIso } from "@/components/weeksupply/weekSupplyData";
@@ -39,6 +41,9 @@ import {
 // panel's horizon (`H`, set from the Command centre horizon each render) — so these take the
 // picked date and send its period.
 let H: TuneupHorizon = "day_ahead";
+/** MP's discoms (its zones) as tune up location ids, and their labels ("Central Discom (CZ)"). */
+const DISCOM_ID: Record<ZoneId, number> = { east: 1003010, central: 1003011, west: 1003012 };
+const discomLabel = (z: ZoneId) => { const x = ZONES.find((y) => y.id === z)!; return `${x.name.replace(/ zone$/i, "")} Discom (${x.code})`; };
 const periodOf = (date: string): TuneupPeriod => tuneupPeriod(date, H);
 const scopeOf = (location_id: number, date: string) => ({ location_id, date: periodOf(date).from_date, horizon: H });
 type Dated<T> = Omit<T, keyof TuneupPeriod> & { date: string };
@@ -147,6 +152,16 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
   // ── config / selection ──────────────────────────────────────────────
   const [config, setConfig] = useState<TuneupConfig | null>(null);
   const [locationId, setLocationId] = useState<number | null>(DEFAULT_TUNEUP_LOCATION);
+  // Country → State → Discom → Division: the tune up APIs take any of these as location_id —
+  // Madhya Pradesh 10030, its discoms 1003010 / 1003011 / 1003012 and their divisions (100301101 …).
+  // Picking one loads that location's forecast and rules; Change / Update / Reset act on it.
+  const [discom, setDiscom] = useState<ZoneId | null>(null);
+  const [division, setDivision] = useState<number | null>(null);
+  const divisions = useDivisions(discom);
+  const pickLocation = (z: ZoneId | null, d: number | null) => {
+    setDiscom(z); setDivision(d);
+    setLocationId(d ?? (z ? DISCOM_ID[z] : DEFAULT_TUNEUP_LOCATION));
+  };
   const [model, setModel] = useState<string>("System");
   const [date, setDate] = useState<string>(tuneupToday);
   const [appliedDate, setAppliedDate] = useState<string>(tuneupToday);
@@ -216,10 +231,12 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
   // Load forecast + rules + similar-days whenever the applied date / location changes.
   // A remembered answer for this date / location shows at once; the API's fresh one replaces it.
   const loadSeq = useRef(0);
-  const loadForecast = useCallback((loc: number, d: string) => {
+  // `force` (the Reload button): skip the remembered copy and show the loading state until the API answers.
+  const loadForecast = useCallback((loc: number, d: string, force = false) => {
     const seq = ++loadSeq.current;
-    setError(null); resetMod();
-    const seen = peekTuneupForecast(d, loc), seenRules = peekRules(loc, d);
+    // A notice ("Manual Forecast saved ✓" …) belongs to the date / location it was for: clear it.
+    setError(null); setNotice(null); resetMod();
+    const seen = force ? null : peekTuneupForecast(d, loc), seenRules = force ? null : peekRules(loc, d);
     if (seen) {
       setForecast(seen); setAppliedDate(d);
       if (seenRules) { setRules(seenRules.rules ?? []); setHistory(seenRules.history ?? null); }
@@ -445,8 +462,9 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
         filename: `demand-tuneup-${appliedDate}`,
       },
       xAxis: {
-        categories: rows.map((r) => blockTime(r.i + 1)),
-        labels: { step: 2, rotation: -45, style: AX },
+        // Block numbers 1 … 96 (the tooltip still shows each block's time).
+        categories: rows.map((r) => String(r.i + 1)),
+        labels: { step: 2, rotation: 0, style: AX },
         tickLength: 0, lineColor: "#e5e7eb",
         crosshair: { color: "#94a3b8", dashStyle: "Dash", width: 1 },
       },
@@ -454,10 +472,10 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
         title: { text: undefined }, min: yDomain[0], max: yDomain[1], startOnTick: false, endOnTick: false,
         gridLineColor: "#e5e7eb", labels: { style: AX },
       },
-      // Legend pinned to the card's bottom edge with no gap above it (Highcharts' default margin and
-      // padding left an empty band under the time labels), so the plot gets that height.
+      // Legend at the card's bottom edge, a small gap (10px) under the block numbers — Highcharts'
+      // default margin and padding left a wide empty band, none at all let it touch the numbers.
       legend: {
-        verticalAlign: "bottom", margin: 0, padding: 2, itemMarginTop: 0, itemMarginBottom: 0, symbolWidth: 18,
+        verticalAlign: "bottom", margin: 10, padding: 2, itemMarginTop: 0, itemMarginBottom: 0, symbolWidth: 18,
         itemStyle: { fontSize: "12px", fontWeight: "500", color: "#475569" }, itemHoverStyle: { color: "#0f172a" },
       },
       tooltip: {
@@ -500,20 +518,81 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
   );
   const adjustRow = <AdjustRow {...{ adjust, setAdjust, preBlocks, setPreBlocks, postBlocks, setPostBlocks }} />;
 
+  // The same period control as the Demand Forecast view: ← date → for Day ahead, the week / month
+  // navigator for Week / Month ahead (forward up to the next week / month).
+  const periodControl = (
+    horizon === "week_ahead" ? (() => {
+            const mon = getWeekRange(parseIso(date)).monday, max = getWeekRange(parseIso(tuneupToday())).monday;
+            max.setDate(max.getDate() + 7);
+            return <WeekNavigator monday={mon} canNext={mon < max} onShift={(dir) => { const d = new Date(mon); d.setDate(d.getDate() + dir * 7); setDate(isoOf(d)); }} />;
+          })() : horizon === "month_ahead" ? (() => {
+            const first = monthStart(parseIso(date)), cur = monthStart(parseIso(tuneupToday()));
+            const max = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+            return <MonthNavigator first={first} canNext={first < max} onShift={(dir) => setDate(isoOf(new Date(first.getFullYear(), first.getMonth() + dir, 1)))} />;
+          })() : (
+            <ForecastDateControl date={date} onChange={setDate} max={config?.date_range.max ?? (() => { const d = parseIso(tuneupToday()); d.setDate(d.getDate() + 7); return isoOf(d); })()} />
+          )
+  );
+  const pickSel = "mt-1.5 h-7 w-full min-w-0 rounded-md border bg-card px-1.5 text-[12px] font-semibold disabled:opacity-50";
+  const pickSelIn = pickSel.replace("mt-1.5 ", "") + " flex-1";
+  const clearBtn = "grid h-7 w-7 shrink-0 place-items-center rounded-md border bg-card text-[14px] leading-none text-muted-foreground hover:bg-accent hover:text-foreground";
+
   return (
     <div
       ref={rootRef}
-      className="flex min-h-[560px] flex-col gap-3 lg:flex-row"
+      className="flex min-h-[560px] flex-col gap-3"
       // Negative bottom margin cancels the page's bottom padding so the page itself doesn't scroll.
       style={{ height: `calc(100vh - ${top}px - 16px)`, marginBottom: -64 }}
     >
+      {/* ── Location pickers + the period control, like the Demand page ── */}
+      <div className="grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-5">
+        <KpiCard title="Country" className="bg-muted/60">
+          <select aria-label="Country" value="IN" onChange={() => {}} className={pickSel}><option value="IN">India</option></select>
+        </KpiCard>
+        <KpiCard title="State" className="bg-muted/60">
+          <select aria-label="State" value="MP" onChange={() => {}} className={pickSel}><option value="MP">Madhya Pradesh</option></select>
+        </KpiCard>
+        {/* Discom and Division start empty (Madhya Pradesh is tuned); × clears a pick, going back up. */}
+        <KpiCard title="Discom" className="bg-muted/60">
+          <div className="mt-1.5 flex w-full items-center gap-1">
+            <select aria-label="Discom" value={discom ?? ""} onChange={(e) => e.target.value && pickLocation(e.target.value as ZoneId, null)} className={pickSelIn}>
+              <option value="" disabled hidden>Select discom</option>
+              {ZONES.map((z) => <option key={z.id} value={z.id}>{discomLabel(z.id)}</option>)}
+            </select>
+            {discom && <button type="button" aria-label="Clear discom" title="Clear discom" onClick={() => pickLocation(null, null)} className={clearBtn}><X className="h-3.5 w-3.5" /></button>}
+          </div>
+        </KpiCard>
+        <KpiCard title="Division" className="bg-muted/60">
+          <div className="mt-1.5 flex w-full items-center gap-1">
+            <select aria-label="Division" value={division ?? ""} disabled={!discom || !divisions.length}
+              onChange={(e) => e.target.value && pickLocation(discom, Number(e.target.value))} className={pickSelIn}>
+              <option value="" disabled hidden>{discom ? "Select division" : "Select a discom first"}</option>
+              {divisions.map((d) => <option key={d.location_id} value={d.location_id}>{d.division}</option>)}
+            </select>
+            {division && <button type="button" aria-label="Clear division" title="Clear division" onClick={() => pickLocation(discom, null)} className={clearBtn}><X className="h-3.5 w-3.5" /></button>}
+          </div>
+        </KpiCard>
+        {/* The period control as a full card in the row, the same size as the pickers. Day ahead's
+            ForecastDateControl is already a card (stretched to the cell); the week / month navigator
+            sits in one. The spinner shows in its corner while loading. */}
+        <div className="relative grid min-w-0 [&>*:first-child]:h-full">
+          {horizon === "week_ahead" || horizon === "month_ahead" ? (
+            <KpiCard title={horizon === "week_ahead" ? "Forecast week" : "Forecast month"} className="bg-muted/60">
+              <div className="mt-1.5 flex max-w-full justify-center overflow-hidden [&_span]:min-w-0">{periodControl}</div>
+            </KpiCard>
+          ) : periodControl}
+          {loading && <Loader2 className="absolute right-2 top-2 h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
       {/* ── Left column: forecast chart over the weather card (like the Demand Forecast page) ── */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:basis-0 lg:grow-[2.2]">
       <div className="flex min-h-[300px] min-w-0 flex-1 flex-col rounded-xl border bg-card p-4">
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[14px] font-semibold">96-Block Forecast{horizon !== "day_ahead" && ` · ${periodLabel(appliedDate, horizon)} (mean day)`}</span>
+          <span className="text-[14px] font-semibold">96-Block Forecast{horizon !== "day_ahead" && ` · ${periodLabel(appliedDate, horizon)} (mean day)`}{discom && ` · ${discomLabel(discom)}`}{division && ` · ${divisions.find((d) => d.location_id === division)?.division ?? division}`}</span>
           <div className="mr-8 flex items-center gap-1 text-muted-foreground">
-            <button type="button" aria-label="Reload" title="Reload" onClick={() => locationId != null && loadForecast(locationId, appliedDate)} className="grid h-7 w-7 place-items-center rounded-full hover:bg-accent hover:text-foreground"><RotateCw className="h-3.5 w-3.5" /></button>
+            <button type="button" aria-label="Reload" title="Reload" onClick={() => locationId != null && loadForecast(locationId, appliedDate, true)} disabled={loading} className="grid h-7 w-7 place-items-center rounded-full hover:bg-accent hover:text-foreground disabled:opacity-60"><RotateCw className={"h-3.5 w-3.5" + (loading ? " animate-spin" : "")} /></button>
             <span title="System Forecast, saved Manual Forecast and the dashed preview of a Change" className="grid h-6 w-6 place-items-center rounded-full border"><Info className="h-3 w-3" /></span>
           </div>
         </div>
@@ -535,22 +614,6 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
 
       {/* ── Right column ────────────────────────────────────────── */}
       <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:w-[30%] lg:min-w-[380px] lg:shrink-0">
-        <div className="flex items-center justify-end gap-2">
-          {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          {/* The same period control as the Demand Forecast view: ← date → for Day ahead, the
-              week / month navigator for Week / Month ahead (forward up to the next week / month). */}
-          {horizon === "week_ahead" ? (() => {
-            const mon = getWeekRange(parseIso(date)).monday, max = getWeekRange(parseIso(tuneupToday())).monday;
-            max.setDate(max.getDate() + 7);
-            return <WeekNavigator monday={mon} canNext={mon < max} onShift={(dir) => { const d = new Date(mon); d.setDate(d.getDate() + dir * 7); setDate(isoOf(d)); }} />;
-          })() : horizon === "month_ahead" ? (() => {
-            const first = monthStart(parseIso(date)), cur = monthStart(parseIso(tuneupToday()));
-            const max = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-            return <MonthNavigator first={first} canNext={first < max} onShift={(dir) => setDate(isoOf(new Date(first.getFullYear(), first.getMonth() + dir, 1)))} />;
-          })() : (
-            <ForecastDateControl date={date} onChange={setDate} max={config?.date_range.max ?? (() => { const d = parseIso(tuneupToday()); d.setDate(d.getDate() + 7); return isoOf(d); })()} />
-          )}
-        </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
           <div className="flex items-stretch border-b">
@@ -601,6 +664,7 @@ export function DemandTuneupPanel({ tf }: { tf: TfId }) {
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

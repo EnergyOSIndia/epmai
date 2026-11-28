@@ -16,11 +16,11 @@ export function ForecastDateControl({ date, onChange, max, min }: { date: string
   const btn = "grid h-7 w-7 place-items-center rounded-md border bg-card text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40";
   return (
     <KpiCard title="Forecast date" className="bg-muted/60">
-      <div className="mt-1.5 flex items-center gap-3">
+      <div className="mt-1.5 flex items-center justify-center gap-2">
         <button type="button" aria-label="Previous day" className={btn} disabled={!!min && date <= min} onClick={() => onChange(shift(date, -1))}>
           <ArrowLeft className="h-3.5 w-3.5" />
         </button>
-        <button type="button" className="num relative text-[15px] font-semibold hover:text-primary"
+        <button type="button" className="num relative whitespace-nowrap text-[15px] font-semibold hover:text-primary"
           onClick={() => inputRef.current?.showPicker?.()}>
           {ddmmyyyy(date)}
           <input ref={inputRef} type="date" value={date} max={max} min={min} aria-label="Forecast date"

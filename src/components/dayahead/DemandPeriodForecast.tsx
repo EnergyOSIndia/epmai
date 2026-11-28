@@ -8,7 +8,7 @@
 // current block (it follows the clock).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CalendarDays } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, X } from "lucide-react";
 import { istNow } from "@/data/engine";
 import { cn } from "@/lib/utils";
 import { cv } from "@/components/chart/colors";
@@ -24,7 +24,7 @@ import { ForecastDateControl } from "./ForecastDateControl";
 import { KpiCard } from "./KpiCard";
 import { PeriodBreakdown } from "./PeriodBreakdown";
 import { WeatherCard } from "./WeatherCard";
-import { ZONES, useZoneLine, useZoneWeather, type ZoneId } from "@/lib/zoneDemand";
+import { ZONES, useDivisions, useZoneLine, useZoneWeather, type ZoneId } from "@/lib/zoneDemand";
 
 const n2 = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const card = "min-h-0 rounded-xl border bg-card p-3";
@@ -63,7 +63,18 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   // Always opens on Madhya Pradesh.
   const regionOn = kind === "intraday" || kind === "day" || kind === "week" || kind === "month";
   const [region, setRegion] = useState<"mp" | ZoneId>("mp");
+  // Refresh button on the chart: re-asks the APIs (e.g. after a Manual saved on Tune up).
+  const [refreshN, setRefreshN] = useState(0);
   const zone: ZoneId | null = regionOn && region !== "mp" ? region : null;
+  // Day ahead goes one level further: State → Zone → Division (a zone's CZ01 / CZ02 / CZ03 …,
+  // division-demand/*). The division resets whenever the zone changes.
+  // Every horizon with the region pickers gets the full Country → State → Discom → Division set.
+  const divisionOn = regionOn;
+  const [division, setDivision] = useState<number | null>(null);
+  const pickRegion = (v: "mp" | ZoneId) => { setRegion(v); setDivision(null); };
+  const divisions = useDivisions(divisionOn ? zone : null);
+  const divisionId = divisionOn && zone && division && divisions.some((d) => d.location_id === division) ? division : null;
+  const divisionCode = divisionId ? divisions.find((d) => d.location_id === divisionId)?.division ?? String(divisionId) : null;
   // Real-time: the current block, kept up to date (checked every 30 s).
   const [nowB, setNowB] = useState(currentBlock);
   useEffect(() => {
@@ -125,17 +136,25 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   }, [kind, day, year, search.week, search.month, navigate, nowB]);
 
   const dataId = DATA_ID[kind];
-  useEffect(() => { dispatch(fetchMeanDemandForecast({ data_id: dataId, from_date: fromIso, to_date: toIso })); }, [dispatch, dataId, fromIso, toIso]);
-  const stateReady = !meanLoading && mean?.dataId === dataId && mean.from === fromIso && mean.to === toIso;
+  useEffect(() => { dispatch(fetchMeanDemandForecast({ data_id: dataId, from_date: fromIso, to_date: toIso })); }, [dispatch, dataId, fromIso, toIso, refreshN]);
+  // A Refresh keeps the current data on screen (the chart's refresh icon spins) instead of the full-page loader:
+  // data for these same dates counts as ready even while the new request is running.
+  const stateReady = mean?.dataId === dataId && mean.from === fromIso && mean.to === toIso;
   const data = stateReady ? mean : null;
   // A zone: zone-demand/data (Intra-day, Day ahead) or zone-demand/average (Week, Month) instead.
-  const zl = useZoneLine(zone, dataId, fromIso, toIso);
-  const ready = zone ? !zl.loading : stateReady;
+  // A discom / division: every line from its own API (zone-demand/* or division-demand/*) —
+  // System and Actual / UDM / MAPE with forecasted_by=System, the saved Manual with forecasted_by=Manual.
+  const zl = useZoneLine(zone, dataId, fromIso, toIso, divisionId, "System", refreshN);
+  const zm = useZoneLine(zone, dataId, fromIso, toIso, divisionId, "Manual", refreshN);
+  const ready = zone ? !zl.loading && !zm.loading : stateReady;
   const loadError = zone ? zl.error : meanError;
 
   // The API's lines: System is the forecast; Manual joins it on the chart once actuals exist.
-  // A zone has one line (no Manual, no Roastering).
-  const sys = zone ? zl.line : data?.system ?? null, man = zone ? null : data?.manual ?? null;
+  // A zone / division has no Roastering.
+  // Manual counts only when the API returned a Manual forecast that differs from System (no rows saved
+  // = no Manual line).
+  const zoneMan = zone && zm.line && zl.line && zm.line.forecast.some((v, k) => Math.abs(v - zl.line!.forecast[k]) > 1e-6) ? zm.line : null;
+  const sys = zone ? zl.line : data?.system ?? null, man = zone ? zoneMan : data?.manual ?? null;
   const forecast = sys?.forecast ?? man?.forecast ?? null;
   const base = sys ?? man;
   const actuals = useMemo(() => (forecast && base ? buildActuals(forecast, { actual: base.actual, mape: base.mape, roastering: base.roastering, udm: base.udm, manual: sys && man ? man.forecast : null }) : null), [forecast, base, sys, man]);
@@ -168,19 +187,57 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   }), [zone, zwx.day, zwx.loading]);
   const weather = zone ? zoneWeather : periodWx ? avgWeather : dayWeather;
   const wxDay = zone ? zwx.day : weather.days[location];
-  const zoneName = (id: string) => { const z = ZONES.find((x) => x.id === id); return z ? `${z.name} (${z.code})` : id; };
+  // MP's three zones are its three discoms (Poorv / Madhya / Paschim Kshetra): "East Discom (EZ)".
+  const discomOf = (z: (typeof ZONES)[number]) => `${z.name.replace(/ zone$/i, "")} Discom (${z.code})`;
+  const zoneName = (id: string) => { const z = ZONES.find((x) => x.id === id); return z ? discomOf(z) : id; };
 
-  // Region picker card in the KPI row.
-  const regionCard = regionOn ? (
+  // Region pickers in the KPI row, where the Region widget was. Day ahead: four cards — Country
+  // (India) → State (Madhya Pradesh) → Zone → Division — each listing the level under the one above.
+  // The other horizons: one Region card (Madhya Pradesh or a zone).
+  const sel = "mt-1.5 h-7 w-full min-w-0 rounded-md border bg-card px-1.5 text-[12px] font-semibold disabled:opacity-50";
+  const selIn = sel.replace("mt-1.5 ", "") + " flex-1";
+  const clearBtn = "grid h-7 w-7 shrink-0 place-items-center rounded-md border bg-card text-[14px] leading-none text-muted-foreground hover:bg-accent hover:text-foreground";
+  const regionCard = !regionOn ? null : divisionOn ? (
+    <>
+      <KpiCard title="Country" className="bg-muted/60">
+        <select aria-label="Country" value="IN" onChange={() => {}} className={sel}><option value="IN">India</option></select>
+      </KpiCard>
+      <KpiCard title="State" className="bg-muted/60">
+        <select aria-label="State" value="MP" onChange={() => {}} className={sel}><option value="MP">Madhya Pradesh</option></select>
+      </KpiCard>
+      {/* Discom and Division start empty (the state's data shows); × clears a pick, going back up. */}
+      <KpiCard title="Discom" className="bg-muted/60">
+        <div className="mt-1.5 flex w-full items-center gap-1">
+          <select aria-label="Discom" value={region === "mp" ? "" : region} onChange={(e) => e.target.value && pickRegion(e.target.value as ZoneId)} className={selIn}>
+            <option value="" disabled hidden>Select discom</option>
+            {ZONES.map((z) => <option key={z.id} value={z.id}>{discomOf(z)}</option>)}
+          </select>
+          {region !== "mp" && <button type="button" aria-label="Clear discom" title="Clear discom" onClick={() => pickRegion("mp")} className={clearBtn}><X className="h-3.5 w-3.5" /></button>}
+        </div>
+      </KpiCard>
+      <KpiCard title="Division" className="bg-muted/60">
+        <div className="mt-1.5 flex w-full items-center gap-1">
+          <select aria-label="Division" value={divisionId ?? ""} disabled={!zone || !divisions.length}
+            onChange={(e) => e.target.value && setDivision(Number(e.target.value))} className={selIn}>
+            <option value="" disabled hidden>{zone ? "Select division" : "Select a discom first"}</option>
+            {divisions.map((d) => <option key={d.location_id} value={d.location_id}>{d.division}</option>)}
+          </select>
+          {divisionId && <button type="button" aria-label="Clear division" title="Clear division" onClick={() => setDivision(null)} className={clearBtn}><X className="h-3.5 w-3.5" /></button>}
+        </div>
+      </KpiCard>
+    </>
+  ) : (
     <KpiCard title="Region" className="bg-muted/60">
-      <select aria-label="Region" value={region} onChange={(e) => setRegion(e.target.value as "mp" | ZoneId)}
+      <select aria-label="Region" value={region} onChange={(e) => pickRegion(e.target.value as "mp" | ZoneId)}
         className="mt-1.5 h-7 w-full rounded-md border bg-card px-2 text-[12px] font-semibold">
         <option value="mp">Madhya Pradesh</option>
         {ZONES.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
       </select>
     </KpiCard>
-  ) : null;
-  const kpiGrid = cn("grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3", regionOn ? "xl:grid-cols-7" : "xl:grid-cols-6");
+  );
+  // 5 KPIs + the pickers + the date control in one row.
+  // Day ahead shows no KPI cards: only Country, State, Zone, Division and the date.
+  const kpiGrid = cn("grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3", !regionOn ? "xl:grid-cols-6" : divisionOn ? "md:grid-cols-5" : "xl:grid-cols-7");
 
   // Fill the viewport below the page's own top edge, so nothing scrolls.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -196,7 +253,7 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
   const title = kind === "intraday" || kind === "realtime"
     ? `96-Block ${name} Forecast` + (kind === "realtime" ? ` · till ${blockTime(nowB)}` : "")
     : `96-Block ${name}-Ahead Forecast` + (!zone && kind !== "day" && data?.period ? ` · ${data.period}` : "");
-  const shownTitle = zone ? `${title} · ${zoneName(zone)}` : title;
+  const shownTitle = zone ? `${title} · ${zoneName(zone)}${divisionCode ? ` · ${divisionCode}` : ""}` : title;
   const mapeNote = base?.periodMape != null ? ` · MAPE ${base.periodMape.toFixed(2)}%` : "";
 
   let body: ReactNode;
@@ -205,7 +262,7 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
     body = (
       <>
         <div className={kpiGrid}>
-          {Array.from({ length: 5 }, (_, i) => <div key={i} className={cn(blk, "h-[74px]")} />)}
+          {!divisionOn && Array.from({ length: 5 }, (_, i) => <div key={i} className={cn(blk, "h-[74px]")} />)}
           {regionCard}
           {control}
         </div>
@@ -219,14 +276,14 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
     body = (
       <>
         <div className={kpiGrid}>
-          {["Total energy", "Peak demand", "Min demand", "Average demand", "Temp range"].map((t) => <KpiCard key={t} title={t} value={null} />)}
+          {!divisionOn && ["Total energy", "Peak demand", "Min demand", "Average demand", "Temp range"].map((t) => <KpiCard key={t} title={t} value={null} />)}
           {regionCard}
           {control}
         </div>
         <div className="grid min-h-0 flex-1 place-items-center rounded-xl border bg-card p-6">
           <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
             <CalendarDays className="h-10 w-10" />
-            <p className="text-[13px]">{loadError ?? `No ${zone ? zoneName(zone) + " " : ""}${dayLike ? "day-ahead" : name.toLowerCase() + "-ahead"} forecast is saved for this ${dayLike ? "date" : kind}.`}</p>
+            <p className="text-[13px]">{loadError ?? `No ${zone ? (divisionCode ?? zoneName(zone)) + " " : ""}${dayLike ? "day-ahead" : name.toLowerCase() + "-ahead"} forecast is saved for this ${dayLike ? "date" : kind}.`}</p>
           </div>
         </div>
       </>
@@ -235,18 +292,21 @@ export function DemandPeriodForecast({ kind }: { kind: PeriodKind }) {
     body = (
       <>
         <div className={kpiGrid}>
+          {!divisionOn && (<>
           <KpiCard title="Total energy" strip={cv("--c-isgs")} value={n2(k.total) + " MWh"} caption={`${upTo == null ? 96 : upTo + 1} blocks summed` + mapeNote} />
           <KpiCard title="Peak demand" strip={cv("--neg")} value={n2(k.peak) + " MW"} caption={`Block ${k.peakB + 1} • ${blockTime(k.peakB)}`} />
           <KpiCard title="Min demand" strip={cv("--demand")} value={k.min.toFixed(2) + " MW"} caption="Lowest 15-min block" />
           <KpiCard title="Average demand" strip={cv("--c-ipp")} value={k.avg.toFixed(2) + " MW"} caption="Mean 15-min block" />
           <KpiCard title="Temp range" strip={cv("--c-hydro")} value={wxDay ? `${Math.min(...wxDay.temps).toFixed(1)}°—${Math.max(...wxDay.temps).toFixed(1)}°C` : null} caption={zone ? `${ZONES.find((z) => z.id === zone)?.code} weather` : "weather forecast"} />
+          </>)}
           {regionCard}
           {control}
         </div>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 lg:grid-cols-12">
           <div className="flex min-h-0 flex-col gap-2.5 lg:col-span-8">
             <div className={cn(card, "flex-1")}>
-              <ForecastChart forecast={forecast} actuals={actuals} date={dayLike ? fromIso : kind} title={shownTitle} upTo={upTo} noRoast={!!zone} />
+              <ForecastChart forecast={forecast} actuals={actuals} date={dayLike ? fromIso : kind} title={shownTitle} upTo={upTo} noRoast={!!zone}
+                onRefresh={() => setRefreshN((n) => n + 1)} refreshing={zone ? zl.refreshing || zm.refreshing : meanLoading} />
             </div>
             <div className={cn(card, "flex-1")}>
               {/* An average day isn't "today": it shows its peak, with no "now" marker. */}

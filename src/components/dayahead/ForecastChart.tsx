@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Menu } from "lucide-react";
+import { Menu, RotateCw } from "lucide-react";
 import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { istNow } from "@/data/engine";
 import { BLOCKS, blockTime, todayIso, type Actuals } from "@/lib/dayahead";
@@ -105,12 +105,16 @@ function download(name: string, href: string) {
 
 /** Card A: 96-block day-ahead forecast. Actual / UDM (yellow) / Roastering / MAPE only when `actuals` is given
  *  (today or earlier); Manual Forecast + Manual MAPE only when that data exists. */
-export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast", upTo, noRoast = false }: {
+export function ForecastChart({ forecast, actuals, date, compact: compactProp = false, bare = false, title = "96-Block Day-Ahead Forecast", upTo, noRoast = false, onRefresh, refreshing = false }: {
   forecast: number[]; actuals: Actuals | null; date: string;
   /** Last block shown (0-based): the chart stops there (Real-time: the current block). All 96 if unset. */
   upTo?: number;
   /** No Roastering series (a zone's data has none). */
   noRoast?: boolean;
+  /** Shows a refresh button left of the menu: reloads the data from the API (e.g. after a Tune up save). */
+  onRefresh?: () => void;
+  /** Spins the refresh icon while the reload is running. */
+  refreshing?: boolean;
   /** Title over the full-size chart. */
   title?: string;
   /** Small-card mode (Week ahead grid): no title bar, export menu or legend; smaller axes. */
@@ -205,7 +209,13 @@ export function ForecastChart({ forecast, actuals, date, compact: compactProp = 
       {!compact && (
       <div className="mb-1 flex items-center justify-between">
         <div className="text-[13px] font-bold">{title}</div>
-        <div className="relative">
+        <div className="relative flex items-center gap-1">
+          {onRefresh && (
+            <button type="button" aria-label="Refresh" title="Refresh (load the latest data, e.g. after a Tune up save)" onClick={onRefresh} disabled={refreshing}
+              className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60">
+              <RotateCw className={"h-4 w-4" + (refreshing ? " animate-spin" : "")} />
+            </button>
+          )}
           <button type="button" aria-label="Export chart" onClick={() => setMenu((m) => !m)}
             className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
             <Menu className="h-4 w-4" />
